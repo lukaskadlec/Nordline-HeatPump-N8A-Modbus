@@ -1,0 +1,582 @@
+================================================================================
+REVERSE-ENGINEERED RS485 / MODBUS RTU PROTOCOL SPECIFICATION
+NORDLINE / AIR-TO-WATER HEAT PUMP COMMUNICATION BUS
+================================================================================
+Document Version : 1.0.0
+Author           : Reverse-Engineering & Telemetry Analysis Team
+Target Audience  : AI Coding Assistants (LLMs), Firmware Developers, Home Assistant / ESPHome Integrators
+Format           : Plain Text Reference Specification
+
+--------------------------------------------------------------------------------
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+1. PHYSICAL & LINK LAYER CONFIGURATION
+2. SYSTEM ARCHITECTURE & BUS PARTICIPANTS
+3. CYCLIC COMMUNICATION OVERVIEW (POLLING CYCLE)
+4. DETAILED MESSAGE SPECIFICATIONS
+   4.1 Master Broadcast Part A (Status & Telemetry - Reg 2001..2090)
+   4.2 Master Broadcast Part B (System Control & Sync - Reg 2091..2180)
+   4.3 LCD Display Polling & Heartbeat (Slave 1, Reg 3001..3021)
+   4.4 Settings Synchronization Handshake (Display -> Master)
+   4.5 Motor / Inverter Communication (Slaves 4 & 5)
+5. REGISTER MAPS & BITFIELDS
+   5.1 Broadcast Part A Telemetry Registers
+   5.2 Digital Output (Relay) Bitfield (Byte Offsets 43-44)
+   5.3 LCD Display Polling Frame Structure (Reg 3001..3021)
+   5.4 Settings Data Block 1 (Reg 1001..1090) - Flag 2
+   5.5 Settings Data Block 2 (Reg 1181..1270) - Flag 8
+6. STATE MACHINE FOR EMULATING THE LCD CONTROLLER
+7. PASSIVE SNIFFING & HOME ASSISTANT / MQTT INTEGRATION NOTES
+8. RAW HEX / DECIMAL FRAME EXAMPLES WITH CRC VERIFICATION
+
+
+================================================================================
+1. PHYSICAL & LINK LAYER CONFIGURATION
+================================================================================
+Bus Interface     : RS-485 (2-wire, Half-Duplex, differential A/B)
+Device Port (Linux): /dev/ttyUSB-TC (USB-to-RS485 adapter)
+Baud Rate         : 9600 bps
+Data Bits         : 8
+Parity            : None (N)
+Stop Bits         : 1
+Flow Control      : None
+Framing Standard  : Modbus RTU
+Byte Order        : Big-Endian (MSB first) for 16-bit register words
+CRC Algorithm     : Modbus CRC-16 (Polynomial: 0xA001, Init: 0xFFFF, Low-Byte first)
+
+CRC Calculation in JavaScript (Reference):
+------------------------------------------
+function calculateCRC(buf, length) {
+    let crc = 0xFFFF;
+    for (let pos = 0; pos < length; pos++) {
+        crc ^= buf[pos];
+        for (let i = 8; i !== 0; i--) {
+            if ((crc & 0x0001) !== 0) {
+                crc = (crc >> 1) ^ 0xA001;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    return crc; // low byte: crc & 0xFF, high byte: (crc >> 8) & 0xFF
+}
+
+
+================================================================================
+2. SYSTEM ARCHITECTURE & BUS PARTICIPANTS
+================================================================================
+The Heat Pump main control board acts as the Modbus MASTER.
+All other modules act as Modbus SLAVES.
+
+Device / Slave Addresses:
+-------------------------
+- Address 0x00 (0)  : Modbus Broadcast (Sent by Master to all units; no slave replies)
+- Address 0x01 (1)  : Main Control Panel / LCD Display Module
+- Address 0x02 (2)  : Secondary Control Panel / Expansion Display (optional/polled)
+- Address 0x04 (4)  : Compressor / Motor Inverter Driver 1
+- Address 0x05 (5)  : Fan Motor / Inverter Driver 2
+
+Topology:
+---------
+  +-----------------------------------------------------------+
+  |                   RS-485 Bus (9600 8N1)                   |
+  +----+-------------+-----------------+-------------+--------+
+       |             |                 |             |
++------+-----+ +-----+------+    +-----+------+ +----+-------+
+|  HP Main   | | LCD Display|    | Inverter 1 | | Inverter 2 |
+| Controller | |  (Slave 1) |    |  (Slave 4) | |  (Slave 5) |
+|  [MASTER]  | +------------+    +------------+ +------------+
++------------+
+
+
+================================================================================
+3. CYCLIC COMMUNICATION OVERVIEW (POLLING CYCLE)
+================================================================================
+The Master controller runs an active polling loop with an approximate 1-second
+repetition rate. The sequence typically looks as follows:
+
+1. Broadcast Status Part A (Addr 0, FC 16, Reg 2001, 90 regs / 180 bytes)
+2. Broadcast Status Part B (Addr 0, FC 16, Reg 2091, 90 regs / 180 bytes)
+3. Poll LCD Display (Addr 1, FC 03, Reg 3001, 21 regs / 42 bytes)
+   -> LCD replies with heartbeat + status/event flag + current real-time clock.
+4. If LCD reported an Event/Change Flag (0x0002 for Block 1 or 0x0008 for Block 2):
+   -> Trigger Settings Read & Write Acknowledge Handshake (see Section 4.4).
+5. Poll Secondary Display if configured (Addr 2, FC 03, Reg 3001, 21 regs).
+6. Poll Inverter 1 (Addr 4, FC 03, Reg 1011, 14 regs) -> Inverter 1 replies (28 bytes).
+7. Command Inverter 1 (Addr 4, FC 16, target frequency).
+8. Poll Inverter 2 (Addr 5, FC 03, Reg 1011, 14 regs) -> Inverter 2 replies (28 bytes).
+
+
+================================================================================
+4. DETAILED MESSAGE SPECIFICATIONS
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1 Master Broadcast Part A (Status & Telemetry)
+--------------------------------------------------------------------------------
+Direction : Master -> Broadcast (No response expected)
+Function  : Modbus FC 16 (0x10) - Write Multiple Registers
+Header    : [00, 16, 07, 209, 00, 90, 180] -> [0x00, 0x10, 0x07, 0xD1, 0x00, 0x5A, 0xB4]
+            - Slave Address : 0 (Broadcast)
+            - Function Code : 16 (0x10)
+            - Start Register: 2001 (0x07D1)
+            - Reg Count     : 90 (0x005A)
+            - Byte Count    : 180 (0xB4)
+Payload   : 180 bytes of live telemetry (temperatures, pressures, relays, EVV, electrical).
+CRC       : 2 bytes Modbus CRC16.
+Total len : 189 bytes.
+
+--------------------------------------------------------------------------------
+4.2 Master Broadcast Part B (System Control & Sync)
+--------------------------------------------------------------------------------
+Direction : Master -> Broadcast (No response expected)
+Function  : Modbus FC 16 (0x10) - Write Multiple Registers
+Header    : [00, 16, 08, 43, 00, 90, 180] -> [0x00, 0x10, 0x08, 0x2B, 0x00, 0x5A, 0xB4]
+            - Slave Address : 0 (Broadcast)
+            - Function Code : 16 (0x10)
+            - Start Register: 2091 (0x082B)
+            - Reg Count     : 90 (0x005A)
+            - Byte Count    : 180 (0xB4)
+Key Offsets inside full buffer:
+- Offset 25 (2 bytes) : Reg 2091 confirmation value
+- Offset 33 (2 bytes) : Constant 15 (0x000F)
+- Offset 35 (2 bytes) : Constant 738 (0x02E2)
+- Offset 37 (2 bytes) : Toggle state (0 or 1), changes every few minutes
+- Offset 39 (2 bytes) : Magic synchronization word: 0x5AA5 (23205 dec)
+
+--------------------------------------------------------------------------------
+4.3 LCD Display Polling & Heartbeat (Slave 1)
+--------------------------------------------------------------------------------
+Direction : Master -> Slave 1 (Poll)
+Request   : [01, 03, 11, 185, 00, 21, 87, 196] -> [0x01, 0x03, 0x0B, 0xB9, 0x00, 0x15, 0x57, 0xC4]
+            - Slave ID      : 1
+            - Function Code : 3 (Read Holding Registers)
+            - Start Address : 3001 (0x0BB9)
+            - Register Qty  : 21 (0x0015)
+            - CRC16         : 0x57 0xC4
+
+Direction : Slave 1 -> Master (Response)
+Format    : [01, 03, 42, <42 data bytes>, <CRC_LOW>, <CRC_HIGH>] (Total 47 bytes)
+            - Slave ID      : 1
+            - Function Code : 3
+            - Byte Count    : 42 (0x2A = 21 registers * 2)
+            - Bytes [3..24] : Control & handshake registers (Reg 3001..3011).
+                              Mostly 0x00 during normal idle operation.
+            - Offset 21-22  : After display reboot/reset, byte 22 is 128 (0x8000).
+            - Offset 23-24  : Action / Trigger Register (Reg 3011).
+                              * 0x0000 = Normal idle / no change.
+                              * 0x0002 = Settings Block 1 update trigger (Reg 1001..1090, e.g. user setpoints/timers).
+                              * 0x0008 = Settings Block 2 update trigger (Reg 1181..1270, e.g. operational/curve params).
+            - Bytes [35..44]: Current Real-Time Clock (RTC) broadcasted by the LCD display:
+                              * Offset 35-36: Year % 100 (e.g. 26 for 2026)
+                              * Offset 37-38: Month (1-12)
+                              * Offset 39-40: Day of month (1-31)
+                              * Offset 41-42: Hour (0-23)
+                              * Offset 43-44: Minute (0-59)
+
+--------------------------------------------------------------------------------
+4.4 Settings Synchronization Handshake (Display -> Master)
+--------------------------------------------------------------------------------
+When settings are modified on the LCD display, the LCD uses Register 3011 (bytes 23-24)
+to notify the Master which configuration block to synchronize:
+
+- Block 1 (Flag 0x0002): Master synchronizes 90 registers at start address 1001 (0x03E9).
+- Block 2 (Flag 0x0008): Master synchronizes 90 registers at start address 1181 (0x049D).
+
+The handshake sequence:
+
+Step 1: LCD signals changed parameter block via periodic poll response
+        Slave 1 answers the normal poll with Event Flag in Register 3011 (offset 23-24):
+        - For Block 1 update: byte 23-24 = 0x0002
+          Data: [1, 3, 42, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,2, 0,0,0,0,0,0,0,0,0,0,0, 26,0,9,0,30,0,14,0,32, CRC]
+        - For Block 2 update: byte 23-24 = 0x0008
+          Data: [1, 3, 42, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,8, 0,0,0,0,0,0,0,0,0,0,0, 26,0,9,0,30,0,14,0,32, 69,233]
+
+Step 2: Master synchronizes corresponding parameter block
+        Master reads or writes the 90-register block:
+        - If Flag was 0x0002 (Block 1):
+          * FC 03 Read:  [01, 03, 03, 233, 00, 90, 20, 65] (Read 90 regs from 1001)
+          * OR FC 16 Write: [01, 16, 03, 233, 00, 90, 180, <180 bytes>, CRC]
+        - If Flag was 0x0008 (Block 2):
+          * FC 03 Read:  [01, 03, 04, 157, 00, 90, 85, 47] (Read 90 regs from 1181)
+          * OR FC 16 Write: [01, 16, 04, 157, 00, 90, 180, <180 bytes>, CRC]
+
+Step 3: 180 bytes of configuration data transferred
+        - For Block 1: Confirmation 1001 (0x03E9) at payload offset 18.
+        - For Block 2: Confirmation 1181 (0x049D) at payload offset 18.
+
+Step 4: Master acknowledges write and resets the LCD control register
+        Master sends Write Multiple Registers (FC 16 / 0x10) to clear Register 3011:
+        Frame: [01, 16, 11, 195, 00, 01, 02, 00, 00, 13, 163] -> [0x01, 0x10, 0x0B, 0xC3, 0x00, 0x01, 0x02, 0x00, 0x00, 0x0D, 0xA3]
+        - Target Reg    : 3011 (0x0BC3)
+        - Reg Count     : 1 (0x0001)
+        - Byte Count    : 2 (0x02)
+        - Value         : 0x0000 (Clears the trigger byte back to 0)
+
+Step 5: LCD confirms register write
+        LCD returns standard Modbus FC 16 confirmation:
+        Frame: [01, 16, 11, 195, 00, 01, 243, 209] -> [0x01, 0x10, 0x0B, 0xC3, 0x00, 0x01, 0xF3, 0xD1]
+        Handshake is now complete! System returns to normal 1 Hz polling loop.
+
+--------------------------------------------------------------------------------
+4.5 Motor / Inverter Communication (Slaves 4 & 5)
+--------------------------------------------------------------------------------
+1. Polling Inverter 1 (Compressor motor driver):
+   Master -> Slave 4: [04, 03, 03, 243, 00, 14, CRC_L, CRC_H]
+   - Addr: 4, FC: 3, Start: 1011 (0x03F3), Qty: 14 registers.
+   Slave 4 -> Master: [04, 03, 28, <28 bytes data>, CRC_L, CRC_H]
+   - Returns operating frequency, currents, voltages, heatsink temperature.
+
+2. Controlling Inverter 1 (Frequency command):
+   Master -> Slave 4: [04, 16, 03, ...] (FC 16 write targeting frequency setpoint).
+
+3. Polling Inverter 2 (Fan motor driver):
+   Master -> Slave 5: [05, 03, 03, 243, 00, 14, CRC_L, CRC_H]
+   - Addr: 5, FC: 3, Start: 1011 (0x03F3), Qty: 14 registers.
+   Slave 5 -> Master: [05, 03, 28, <28 bytes data>, CRC_L, CRC_H]
+
+
+================================================================================
+5. REGISTER MAPS & BITFIELDS
+================================================================================
+
+--------------------------------------------------------------------------------
+5.1 Broadcast Part A Telemetry Registers (Reg 2001..2090)
+--------------------------------------------------------------------------------
+Note: Offsets in the table below are measured from the START of the 189-byte Modbus
+frame (Byte 0 = Slave Addr 0x00, Byte 1 = FC 0x10, Byte 2..3 = Addr 0x07D1,
+Byte 4..5 = Qty 0x005A, Byte 6 = ByteCount 0xB4, Byte 7 = Start of Register 2001).
+
+Offset | Modbus Reg | Name / Description              | Type     | Scale / Unit
+-------+------------+---------------------------------+----------+-----------------
+7      | 2001       | Raw Status / Mode Param 1       | int16_be | raw
+9      | 2002       | Raw Status / Mode Param 2       | int16_be | raw
+11     | 2003       | Raw Status / Mode Param 3       | int16_be | raw
+13     | 2004       | Raw Status / Mode Param 4       | int16_be | raw
+15     | 2005       | Raw Status / Mode Param 5       | int16_be | raw
+17     | 2006       | Raw Status / Mode Param 6       | int16_be | raw
+19     | 2007       | Raw Status / Mode Param 7       | int16_be | raw
+21     | 2008       | Raw Status / Mode Param 8       | int16_be | raw
+23     | 2009       | Raw Status / Mode Param 9       | int16_be | raw
+25     | 2010       | Raw Status / Mode Param 10      | int16_be | raw
+27     | 2011       | Main ON / OFF State Switch      | int16_be | 0=Off, 1=On
+29     | 2012       | Operation Mode Flag (Constant 1)| int16_be | raw
+31..41 | 2013..2018 | Internal Operational States     | int16_be | raw
+43     | 2019 (MSB) | Digital Outputs Part 2 (Relays) | bitfield | See Section 5.2
+44     | 2019 (LSB) | Digital Outputs Part 1 (Relays) | bitfield | See Section 5.2
+45     | 2020       | Electronic Expansion Valve(EVV) | int16_be | steps / opening
+47..71 | 2021..2033 | Secondary Status Parameters     | int16_be | raw
+73     | 2034       | Operating State Flags (bit 3..) | int16_be | bitfield
+75..93 | 2035..2044 | Internal Control Statuses       | int16_be | raw
+95     | 2045       | Water Inlet Temp (Teplota vstup)| int16_be | 0.1 °C (/10)
+97     | 2046       | Water Outlet Temp(Teplota vystup| int16_be | 0.1 °C (/10)
+99     | 2047       | Discharge Temp (Teplota vytlak) | int16_be | 0.1 °C (/10)
+101    | 2048       | DHW Boiler Temp (Teplota bojler)| int16_be | 0.1 °C (/10)
+103    | 2049       | Suction Temp (Teplota sani)     | int16_be | 0.1 °C (/10)
+105    | 2050       | Evaporator Temp(Teplota vyparnik| int16_be | 0.1 °C (/10)
+107    | 2051       | Ambient Temp (Teplota okoli)    | int16_be | 0.1 °C (/10)
+109    | 2052       | Suction Pressure (Tlak sani)    | int16_be | 0.1 bar (/10)
+111    | 2053       | Discharge Pressure(Tlak vytlak) | int16_be | 0.1 bar (/10)
+113    | 2054       | Target Frequency (Frekvence set)| int16_be | 1.0 Hz
+115    | 2055       | Actual Frequency(Frekvence skut)| int16_be | 1.0 Hz
+117    | 2056       | Actual Fan Speed                | uint16_be| rpm
+121    | 2058       | Suction Superheat(Prehrati sani)| int16_be | 0.1 °C (/10)
+123    | 2059       | Discharge Superheat(Preh. vytlak| int16_be | 0.1 °C (/10)
+125    | 2060       | Inverter Module Prot. Temp      | int16_be | 0.1 °C (/10)
+127    | 2061       | AC Input Voltage (AC vstup nap.)| uint16_be| 1.0 V
+129    | 2062       | AC Input Current (AC vstup proud| uint16_be| 0.1 A (/10)
+131    | 2063       | Compressor Phase Current        | uint16_be| 0.1 A (/10)
+133    | 2064       | DC Bus Voltage (Napeti sbernice)| uint16_be| 1.0 V
+135    | 2065       | Inverter Temp (Teplota invertor)| int16_be | 0.1 °C (/10)
+137    | 2066       | Target Fan Speed (Nast. rychlost| uint16_be| rpm
+
+--------------------------------------------------------------------------------
+5.2 Digital Output (Relay) Bitfield (Byte Offsets 43-44)
+--------------------------------------------------------------------------------
+These 16 bits directly report the hardware states of all actuator relays and outputs:
+
+Byte Offset 44 (Lower Byte / Relay Group 1):
+  Bit 0 (0x01) : Compressor (O01)                         [1 = ON, 0 = OFF]
+  Bit 1 (0x02) : Primary Circulation Water Pump (O02)     [1 = ON, 0 = OFF]
+  Bit 2 (0x04) : 4-way Reversing Valve (O03)              [1 = ON (Heat/Defrost), 0 = OFF]
+  Bit 3 (0x08) : Fan Motor Relay (O04)                    [1 = ON, 0 = OFF]
+  Bit 4 (0x10) : Reserved / Unassigned
+  Bit 5 (0x20) : Antifreeze Heating Strip - Basepan (O06) [1 = ON, 0 = OFF]
+  Bit 6 (0x40) : Crankcase Antifreeze Heating Strip (O07) [1 = ON, 0 = OFF]
+  Bit 7 (0x80) : Vapor Injection / Spray Valve (O08)      [1 = ON, 0 = OFF]
+
+Byte Offset 43 (Upper Byte / Relay Group 2):
+  Bit 0 (0x01) : Auxiliary Electric Backup Heater (O09)   [1 = ON, 0 = OFF]
+  Bit 1 (0x02) : Reserved
+  Bit 2 (0x04) : General Alarm Relay (O11)                [1 = ALARM, 0 = OK]
+  Bit 3 (0x08) : DHW / Hot Water Circulation Pump (O12)   [1 = ON, 0 = OFF]
+  Bit 4 (0x10) : 3-way Diverting Valve - DHW/Heat (O13)   [1 = DHW, 0 = Space Heat]
+  Bit 5..7     : Reserved
+
+--------------------------------------------------------------------------------
+5.3 LCD Display Polling Frame Structure (Reg 3001..3021)
+--------------------------------------------------------------------------------
+Full Response Buffer Length = 47 bytes (Header 3 bytes + 42 data bytes + 2 CRC bytes).
+
+Offset | Modbus Reg | Function / Description
+-------+------------+-----------------------------------------------------------
+0      | -          | Slave Address: 0x01
+1      | -          | Function Code: 0x03
+2      | -          | Byte Count: 0x2A (42 bytes)
+3..22  | 3001..3010 | Reserved / Status words (mostly 0x0000; byte 22 is 0x80 on boot)
+23..24 | 3011       | Trigger / Notification Register:
+       |            |   0x0000 = Idle / Standby (Normal heartbeat)
+       |            |   0x0002 = Settings Block 1 Update Trigger (Reg 1001..1090)
+       |            |   0x0008 = Settings Block 2 Update Trigger (Reg 1181..1270)
+25..34 | 3012..3016 | Reserved (zeros)
+35..36 | 3017       | Real-Time Clock: Year % 100 (e.g. 26 -> 2026)
+37..38 | 3018       | Real-Time Clock: Month (1 - 12)
+39..40 | 3019       | Real-Time Clock: Day of month (1 - 31)
+41..42 | 3020       | Real-Time Clock: Hour (0 - 23)
+43..44 | 3021       | Real-Time Clock: Minute (0 - 59)
+45..46 | -          | Modbus CRC-16 (Low byte, High byte)
+
+--------------------------------------------------------------------------------
+5.4 Settings Data Block 1 (Reg 1001..1090) - Triggered by Flag 0x0002
+--------------------------------------------------------------------------------
+Queried by Master via FC 03: Start Address = 1001 (0x03E9), Quantity = 90 registers.
+(Or written via FC 16: [01, 16, 03, 233, 00, 90, 180, ...])
+Returned by LCD: 180 bytes containing user configurable setpoints:
+- Reg 1010: Start address confirmation = 1001 (0x03E9)
+- Reg 1040: DHW setpoint / base target temp (e.g. 50 °C)
+- Reg 1043: Ambient temp lower limit for heating curve (e.g. -20.0 °C)
+- Reg 1045: Heating water setpoint (e.g. 35.0 °C)
+- Reg 1060: Target temperature limit (e.g. 30.0 °C)
+- Reg 1069: Room temperature setpoint (e.g. 22 °C)
+- Reg 1071: Heating circuit target (e.g. 45.0 °C)
+- Reg 1072: Maximum allowed temperature limit (e.g. 60.0 °C)
+
+--------------------------------------------------------------------------------
+5.5 Settings Data Block 2 (Reg 1181..1270) - Triggered by Flag 0x0008
+--------------------------------------------------------------------------------
+Queried by Master via FC 03: Start Address = 1181 (0x049D), Quantity = 90 registers.
+(Or written via FC 16: [01, 16, 04, 157, 00, 90, 180, ...])
+Returned by LCD: 180 bytes containing operational and curve configuration parameters:
+- Reg 1190: Start address confirmation = 1181 (0x049D)
+- Reg 1191: Operational limit / temp setpoint = 500 (50.0 °C)
+- Reg 1192: Secondary temp setpoint = 220 (22.0 °C)
+- Reg 1193: Minimum threshold = 200 (20.0 °C)
+- Reg 1194..1195: Hysteresis / deadbands (e.g. 30 -> 3.0 °C)
+- Reg 1196: Target threshold = 400 (40.0 °C)
+- Reg 1197: Maximum cutoff limit = 650 (65.0 °C)
+- Reg 1198..1201: Intermediate curve thresholds (200, 500, 120, 200)
+- Reg 1206: Low ambient compensation = -50 (-5.0 °C)
+- Reg 1208: Extreme ambient compensation = -150 (-15.0 °C)
+- Reg 1209..1212: Water supply curve slope limits (450, 550, 550, 450)
+- Reg 1255..1258: System operational mode flags and timer definitions
+
+
+================================================================================
+6. STATE MACHINE FOR EMULATING THE LCD CONTROLLER
+================================================================================
+If building an ESP32 / Arduino / Raspberry Pi module to replace or intercept the
+LCD display, implement this state machine:
+
++-----------------------------------------------------------------------------+
+| STATE 0: IDLE_LISTENING                                                     |
+| - Listen on RS485 for request matching [01, 03, 0B, B9, 00, 15, ...]        |
+| - If received:                                                              |
+|   1. Build 42-byte response.                                                |
+|   2. Put current local time in offsets 35-44.                               |
+|   3. If Block 1 (Reg 1001) setting change queued:                           |
+|        Set offsets 23-24 (Reg 3011) = 0x0002                                |
+|        Transition -> STATE 1: AWAITING_SETTINGS_SYNC                         |
+|      Else if Block 2 (Reg 1181) setting change queued:                      |
+|        Set offsets 23-24 (Reg 3011) = 0x0008                                |
+|        Transition -> STATE 1: AWAITING_SETTINGS_SYNC                         |
+|      Else:                                                                  |
+|        Set offsets 23-24 (Reg 3011) = 0x0000                                |
+|   4. Calculate CRC16 and transmit response.                                 |
++--------------------------------------+--------------------------------------+
+                                       |
+                   Trigger Flag 0x0002 | or 0x0008 sent to Master
+                                       v
++-----------------------------------------------------------------------------+
+| STATE 1: AWAITING_SETTINGS_SYNC                                             |
+| - Master recognizes flag and requests/sends parameters:                     |
+|   * For Flag 0x0002: Reads Reg 1001 [01, 03, 03, E9, 00, 5A, ...]           |
+|                      or Writes Reg 1001 [01, 10, 03, E9, 00, 5A, B4, ...]   |
+|   * For Flag 0x0008: Reads Reg 1181 [01, 03, 04, 9D, 00, 5A, ...]           |
+|                      or Writes Reg 1181 [01, 10, 04, 9D, 00, 5A, B4, ...]   |
+| - If read request received:                                                 |
+|   1. Construct 180-byte buffer with current/modified parameter registers.   |
+|   2. Append Modbus FC 03 response header [01, 03, B4, ...] + CRC16.         |
+|   3. Transmit packet to Master.                                             |
+|   4. Transition -> STATE 2: AWAITING_WRITE_ACK                              |
+| - Timeout: 3 seconds -> Fall back to STATE 0.                               |
++--------------------------------------+--------------------------------------+
+                                       |
+                   180 bytes sent      |
+                                       v
++-----------------------------------------------------------------------------+
+| STATE 2: AWAITING_WRITE_ACK                                                 |
+| - Master stores parameters and clears register 3011 by sending:             |
+|   [01, 16, 0B, C3, 00, 01, 02, 00, 00, 0D, A3]                             |
+| - When received:                                                            |
+|   1. Clear local pending change queue.                                      |
+|   2. Send confirmation echo: [01, 16, 0B, C3, 00, 01, F3, D1].              |
+|   3. Transition -> STATE 0: IDLE_LISTENING.                                 |
++-----------------------------------------------------------------------------+
+
+
+================================================================================
+7. PASSIVE SNIFFING & HOME ASSISTANT / MQTT INTEGRATION NOTES
+================================================================================
+If your goal is only to monitor and graph all Heat Pump metrics in Home Assistant:
+1. You DO NOT need to transmit on the RS-485 bus.
+2. Passive sniffing is 100% electrically safe and avoids colliding with the Master.
+3. Simply tap the RS-485 A and B lines with an isolated USB-RS485 adapter.
+4. Listen exclusively for frames starting with:
+   [00, 16, 07, 209] -> [0x00, 0x10, 0x07, 0xD1] (Broadcast Part A).
+5. Extract registers using the offsets defined in Section 5.1 & 5.2.
+6. Publish to Home Assistant via MQTT Discovery (Home Assistant MQTT format:
+   - Sensors: Inlet/Outlet/Discharge/Boiler/Suction/Evaporator/Ambient temps
+   - Binary Sensors: Compressor, Water Pump, 4-Way Valve, Fan, Heaters
+   - Measurements: Pressures, Frequencies, AC Voltage, AC Current, Fan RPM).
+
+
+================================================================================
+8. RAW HEX / DECIMAL FRAME EXAMPLES WITH CRC VERIFICATION
+================================================================================
+
+Example 1: Master Poll LCD Display (FC 03, Reg 3001, Qty 21)
+--------------------------------------------------------------------------------
+Dec : [1, 3, 11, 185, 0, 21, 87, 196]
+Hex : 01 03 0B B9 00 15 57 C4
+Breakdown:
+  01    : Slave ID 1
+  03    : Function Code 3 (Read Holding Registers)
+  0B B9 : Start Register 3001
+  00 15 : Quantity 21 registers (42 bytes)
+Example 2: LCD Reply with Event Flag 2 (Trigger Block 1 settings synchronization)
+--------------------------------------------------------------------------------
+Dec : [1, 3, 42, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,2, 0,0,0,0,0,0,0,0,0,0,0, 26,0,9,0,30,0,14,0,32, CRC_L, CRC_H]
+Hex : 01 03 2A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 02 ...
+Breakdown:
+  01    : Slave ID 1
+  03    : Function Code 3
+  2A    : 42 data bytes
+  Offset 23-24: 00 02 -> Event Flag 2 (Settings Block 1 Changed on LCD)
+  Offset 35-44: Real-time clock (Year, Month, Day, Hour, Min)
+
+Example 3: Master Read Block 1 Request (FC 03, Reg 1001, Qty 90)
+--------------------------------------------------------------------------------
+Dec : [1, 3, 3, 233, 0, 90, 20, 65]
+Hex : 01 03 03 E9 00 5A 14 41
+Breakdown:
+  01    : Slave ID 1
+  03    : Function Code 3
+  03 E9 : Start Register 1001
+  00 5A : Quantity 90 registers (180 data bytes)
+  14 41 : CRC-16 (Valid: Low=0x14 (20), High=0x41 (65))
+
+Example 4: Master Write Block 1 Request (FC 16, Reg 1001, Qty 90, 180 Bytes)
+--------------------------------------------------------------------------------
+Dec : [1, 16, 3, 233, 0, 90, 180, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 3,233, 0,0, ...]
+Hex : 01 10 03 E9 00 5A B4 00 00 ... 03 E9 ...
+Breakdown:
+  01    : Slave ID 1
+  10    : Function Code 16 (Write Multiple Registers)
+  03 E9 : Start Register 1001
+  00 5A : Quantity 90 registers
+  B4    : 180 data bytes
+  Payload Offset 18: 03 E9 (Register 1010 confirmation = 1001)
+
+Example 5: Master Clear/Acknowledge Register 3011 (FC 16, Reg 3011, Qty 1, Value 0x0000)
+--------------------------------------------------------------------------------
+Dec : [1, 16, 11, 195, 0, 1, 2, 0, 0, 13, 163]
+Hex : 01 10 0B C3 00 01 02 00 00 0D A3
+Breakdown:
+  01    : Slave ID 1
+  10    : Function Code 16 (0x10 - Write Multiple Registers)
+  0B C3 : Start Register 3011
+  00 01 : Quantity 1 register
+  02    : Byte Count 2
+  00 00 : Value 0x0000
+  0D A3 : CRC-16 (Valid: Low=0x0D (13), High=0xA3 (163))
+
+Example 6: LCD Acknowledge Confirmation (FC 16 Echo)
+--------------------------------------------------------------------------------
+Dec : [1, 16, 11, 195, 0, 1, 243, 209]
+Hex : 01 10 0B C3 00 01 F3 D1
+Breakdown:
+  01    : Slave ID 1
+  10    : Function Code 16
+  0B C3 : Start Register 3011
+  00 01 : Quantity 1 register
+  F3 D1 : CRC-16 (Valid: Low=0xF3 (243), High=0xD1 (209))
+
+Example 7: LCD Reply with Event Flag 8 (Trigger Block 2 settings synchronization)
+--------------------------------------------------------------------------------
+Dec : [1, 3, 42, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,8, 0,0,0,0,0,0,0,0,0,0,0, 26,0,9,0,30,0,14,0,32, 69, 233]
+Hex : 01 03 2A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 08 ...
+Breakdown:
+  01    : Slave ID 1
+  03    : Function Code 3
+  2A    : 42 data bytes
+  Offset 23-24: 00 08 -> Event Flag 8 (Settings Block 2 Changed on LCD)
+  45 E9 : CRC-16 (Valid: Low=0x45 (69), High=0xE9 (233))
+
+Example 8: Master Read Block 2 Settings Request (FC 03, Reg 1181, Qty 90)
+--------------------------------------------------------------------------------
+Dec : [1, 3, 4, 157, 0, 90, 85, 47]
+Hex : 01 03 04 9D 00 5A 55 2F
+Breakdown:
+  01    : Slave ID 1
+  03    : Function Code 3
+  04 9D : Start Register 1181
+  00 5A : Quantity 90 registers (180 data bytes)
+  55 2F : CRC-16 (Valid: Low=0x55 (85), High=0x2F (47))
+
+Example 9: LCD Block 2 Settings Data Response (180 bytes)
+--------------------------------------------------------------------------------
+Dec : [1, 3, 180, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 4,157, 1,244, 0,220, 0,200, 0,30, 0,30, 1,144, 2,138, 0,200, 1,244, 0,120, 0,200, 0,0, 0,50, 0,20, 0,45, 255,206, 0,0, 255,106, 1,194, 2,38, 2,38, 1,194, 0,0, ..., 1, 0,16, 0,1, 0,20, 0,0, ..., 125, 234]
+Breakdown:
+  01    : Slave ID 1
+  03    : Function Code 3
+  B4    : 180 data bytes
+  Offset 18: 04 9D (Register 1190 confirmation = 1181)
+  Reg 1191: 500 (50.0 °C), Reg 1192: 220 (22.0 °C), Reg 1196: 400 (40.0 °C), Reg 1197: 650 (65.0 °C)
+  Reg 1206: -50 (-5.0 °C), Reg 1208: -150 (-15.0 °C), Reg 1209: 450 (45.0 °C), Reg 1210: 550 (55.0 °C)
+  CRC-16: 125, 234 (Valid: Low=0x7D (125), High=0xEA (234)): Low=0x7D (125), High=0xEA (234))
+
+================================================================================
+9. PARAMETER DISCOVERY WORKFLOW (DIFF-LOGGING IN NORMAL OPERATION)
+================================================================================
+To deduce what unknown configuration registers represent, passive diff-logging
+is implemented in Node-RED:
+
+1. Setup:
+   - Heat Pump Master and real LCD panel communicate normally on RS-485.
+   - Node-RED runs with LCD Emulator DISABLED (passive sniffing only, no collisions).
+   - Node "Detect & Log Config Register Changes" listens to incoming [1, 3, 180, ...].
+
+2. Process:
+   - On the first packet received for each block, an initial baseline snapshot
+     is stored in memory (logging all non-zero values).
+   - Go to the physical LCD display wall unit and modify ONE single parameter
+     (e.g., change DHW target temperature from 50 °C to 52 °C, or heating curve slope).
+   - Save/confirm the setting on the LCD unit.
+   - The LCD unit transmits the updated 180-byte block to the Master.
+   - The diff logger compares the 90 registers against the previous snapshot.
+   - It outputs an instant diff line to both the Node-RED Debug window and to
+     file `/data/log/config_changes.txt`:
+
+     Example Output:
+     2026-10-01 12:50:33 | [CONFIG CHANGED] Block 1 (Reg 1001-1090 / Flag 2) via FC 16 Write [1 change(s)]: Reg 1040: 50 -> 52 (Diff: +2 | Hex: 0x0032->0x0034)
+
+   - Conclusion deduced: Register 1040 controls DHW Target Temperature.
+
+3. Log File Maintenance:
+   - File path: `/data/log/config_changes.txt`
+   - Use the "delete" inject node in Node-RED to clear the log file at any time.
+   - Use the "Reset diff baseline snapshots" inject node to re-initialize baseline.
+
+================================================================================
+END OF SPECIFICATION FILE
+================================================================================
