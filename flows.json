@@ -11,8 +11,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 820,
-        "y": 20,
+        "x": 940,
+        "y": 80,
         "wires": []
     },
     {
@@ -21,8 +21,8 @@
         "z": "1c00011a6f22edfe",
         "name": "",
         "serial": "7450e794f0202cde",
-        "x": 100,
-        "y": 180,
+        "x": 220,
+        "y": 240,
         "wires": [
             [
                 "56abaeba7eb333f0",
@@ -43,8 +43,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 260,
-        "y": 280,
+        "x": 380,
+        "y": 340,
         "wires": []
     },
     {
@@ -58,8 +58,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 320,
-        "y": 80,
+        "x": 440,
+        "y": 140,
         "wires": [
             [
                 "full_individual_decoder",
@@ -84,8 +84,8 @@
         "drop": true,
         "allowrate": false,
         "outputs": 1,
-        "x": 820,
-        "y": 80,
+        "x": 940,
+        "y": 140,
         "wires": [
             [
                 "8772fc93de3fb2d1",
@@ -114,8 +114,8 @@
         "topic": "",
         "payload": "Start",
         "payloadType": "str",
-        "x": 1350,
-        "y": 680,
+        "x": 1510,
+        "y": 960,
         "wires": [
             [
                 "b1569ee02102ae62"
@@ -126,6 +126,7 @@
         "id": "b1569ee02102ae62",
         "type": "function",
         "z": "1c00011a6f22edfe",
+        "d": true,
         "name": "LCD Emulator (Slave 1 Responder)",
         "func": "// =========================================================================\n// LCD EMULATOR (SLAVE 1 RESPONDER)\n// Mapping:\n// - Block 1: Reg 1001..1090 (3, 233) -> FLAG 2\n// - Block 2: Reg 1181..1270 (4, 157) -> FLAG 8\n// =========================================================================\n\nconst BASE_CONFIG_BYTES_1 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,233,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,\n    0,0,0,0,0,0,0,1,0,5,0,1,0,5,0,30,0,80,0,17,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,50,0,20,0,20,255,56,4,76,1,94,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,32,1,44,0,30,0,110,2,38,1,44,1,24,0,200,0,\n    0,0,0,0,22,0,1,1,194,2,88,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0\n];\n\nconst BASE_CONFIG_BYTES_2 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,157,1,244,0,220,0,200,0,30,0,30,1,144,\n    2,138,0,200,1,244,0,120,0,200,0,0,0,50,0,20,0,45,255,206,0,0,255,106,1,194,\n    2,38,2,38,1,194,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,16,0,1,0,20,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n];\n\nfunction getBaseRegisters(bytes, startReg) {\n    const regs = {};\n    const buf = Buffer.from(bytes);\n    for (let i = 0; i < 90; i++) {\n        regs[startReg + i] = buf.readInt16BE(i * 2);\n    }\n    return regs;\n}\n\n// -------------------------------------------------------------------------\n// Handle manual \"Start\" trigger or emulator control strings\n// -------------------------------------------------------------------------\nif (msg.payload === \"Start\" || msg.payload === \"start\") {\n    flow.set(\"lcd_event_flag\", 2);\n    node.status({ fill: \"green\", shape: \"dot\", text: \"Flag set: 2 (Block 1)\" });\n    return null;\n}\n\n// Check if emulation is enabled (default disabled during normal operation with real LCD)\nif (flow.get(\"lcd_emulator_enabled\") !== true) {\n    return null;\n}\n\nlet buf = msg.payload;\nif (!Buffer.isBuffer(buf)) {\n    if (Array.isArray(buf)) {\n        buf = Buffer.from(buf);\n    } else {\n        return null;\n    }\n}\n\n// Modbus frame safety check: Must be at least 5 bytes and target Slave 1\nif (buf.length < 5 || buf[0] !== 1) {\n    return null;\n}\n\nconst fc = buf[1];\n\n// =========================================================================\n// 1. MASTER PERIODIC POLL: [01, 03, 0B, B9, 00, 15] (FC 03, Reg 3001, Qty 21)\n// =========================================================================\nif (fc === 3 && buf[2] === 11 && buf[3] === 185 && buf[4] === 0 && buf[5] === 21) {\n    const resp = Buffer.alloc(45);\n    resp[0] = 1;  // Slave 1\n    resp[1] = 3;  // FC 3\n    resp[2] = 42; // Byte Count: 42 (21 registers * 2)\n\n    // Flag: 0=idle, 2=Block 1 (1001), 8=Block 2 (1181)\n    const flag = flow.get(\"lcd_event_flag\") ?? 0;\n    resp.writeUInt16BE(flag, 23); // Register 3011 (bytes 23-24)\n\n    // Current Date/Time in Registers 3017-3021 (Big-Endian)\n    const now = new Date();\n    resp.writeUInt16BE(now.getFullYear() % 100, 35); // Reg 3017 (Year)\n    resp.writeUInt16BE(now.getMonth() + 1,      37); // Reg 3018 (Month)\n    resp.writeUInt16BE(now.getDate(),           39); // Reg 3019 (Day)\n    resp.writeUInt16BE(now.getHours(),          41); // Reg 3020 (Hour)\n    resp.writeUInt16BE(now.getMinutes(),        43); // Reg 3021 (Minute)\n\n    node.status({ fill: flag ? \"yellow\" : \"green\", shape: \"dot\", text: `Poll replied (Flag: ${flag})` });\n\n    const outMsg = { payload: resp };\n    return [outMsg, null]; // Output 1 -> modbus-crc16 -> delay -> serial out\n}\n\n// =========================================================================\n// 2a. MASTER READ SETTINGS: (FC 03, Qty 90 registers / 180 bytes)\n//    - Block 1 (Flag 2): Start Reg 1001 (0x03E9 -> buf[2]=3, buf[3]=233)\n//    - Block 2 (Flag 8): Start Reg 1181 (0x049D -> buf[2]=4, buf[3]=157)\n// =========================================================================\nif (fc === 3 && (buf.length >= 6) && (buf[4] === 0 && buf[5] === 90)) {\n    const startReg = buf.readUInt16BE(2);\n    const isBlock2 = (startReg === 1181) || (startReg !== 1001 && flow.get(\"lcd_event_flag\") === 8);\n\n    const targetStartReg = isBlock2 ? 1181 : 1001;\n    const baseBytes = isBlock2 ? BASE_CONFIG_BYTES_2 : BASE_CONFIG_BYTES_1;\n    const baseRegs = getBaseRegisters(baseBytes, targetStartReg);\n\n    const contextKey = isBlock2 ? \"lcd_config_registers_block2\" : \"lcd_config_registers_block1\";\n    let configRegs = flow.get(contextKey);\n    if (!configRegs) {\n        configRegs = baseRegs;\n        flow.set(contextKey, configRegs);\n    }\n\n    const resp = Buffer.alloc(183);\n    resp[0] = 1;   // Slave 1\n    resp[1] = 3;   // FC 3\n    resp[2] = 180; // Byte count: 180 (90 registers * 2)\n\n    for (let i = 0; i < 90; i++) {\n        const regNum = targetStartReg + i;\n        const val = (configRegs[regNum] !== undefined) ? configRegs[regNum] : (baseRegs[regNum] || 0);\n        resp.writeInt16BE(val, 3 + i * 2);\n    }\n\n    const blockName = isBlock2 ? \"Block 2 (Reg 1181-1270, Flag 8)\" : \"Block 1 (Reg 1001-1090, Flag 2)\";\n    node.status({ fill: \"blue\", shape: \"dot\", text: `Sent 90 regs: ${blockName}` });\n\n    const outMsg = { payload: resp };\n    const logMsg = {\n        payload: `Master read 90 config registers for ${blockName}`,\n        block: isBlock2 ? 2 : 1,\n        startRegister: targetStartReg,\n        flag: isBlock2 ? 8 : 2,\n        timestamp: new Date().toISOString(),\n        registers: configRegs\n    };\n\n    return [outMsg, logMsg];\n}\n\n// =========================================================================\n// 2b. MASTER WRITE SETTINGS: (FC 16, Qty 90 registers / 180 bytes)\n//    - Block 1 (Flag 2): Start Reg 1001 (0x03E9 -> buf[2]=3, buf[3]=233)\n//    - Block 2 (Flag 8): Start Reg 1181 (0x049D -> buf[2]=4, buf[3]=157)\n// =========================================================================\nif (fc === 16 && buf.length >= 187 && buf[6] === 180) {\n    let startReg = buf.readUInt16BE(2);\n    if (startReg !== 1001 && startReg !== 1181 && buf.length >= 27) {\n        const conf = buf.readUInt16BE(25);\n        if (conf === 1001 || conf === 1181) startReg = conf;\n    }\n\n    if (startReg === 1001 || startReg === 1181) {\n        const isBlock2 = (startReg === 1181);\n        const targetStartReg = isBlock2 ? 1181 : 1001;\n        const contextKey = isBlock2 ? \"lcd_config_registers_block2\" : \"lcd_config_registers_block1\";\n\n        let configRegs = flow.get(contextKey);\n        if (!configRegs) {\n            const baseBytes = isBlock2 ? BASE_CONFIG_BYTES_2 : BASE_CONFIG_BYTES_1;\n            configRegs = getBaseRegisters(baseBytes, targetStartReg);\n        }\n\n        for (let i = 0; i < 90; i++) {\n            configRegs[targetStartReg + i] = buf.readInt16BE(7 + i * 2);\n        }\n        flow.set(contextKey, configRegs);\n\n        const expectedFlag = isBlock2 ? 8 : 2;\n        if (flow.get(\"lcd_event_flag\") === expectedFlag) {\n            flow.set(\"lcd_event_flag\", 0);\n        }\n\n        const blockName = isBlock2 ? \"Block 2 (Reg 1181-1270, Flag 8)\" : \"Block 1 (Reg 1001-1090, Flag 2)\";\n        node.status({ fill: \"blue\", shape: \"dot\", text: `FC 16 wrote 90 regs: ${blockName}` });\n\n        // Standard Modbus FC 16 echo response: [1, 16, AddrHi, AddrLo, 0, 90] (CRC appended by modbus-crc16)\n        const resp = Buffer.from([1, 16, buf[2], buf[3], 0, 90]);\n\n        const outMsg = { payload: resp };\n        const logMsg = {\n            payload: `Master wrote 90 config registers for ${blockName} via FC 16`,\n            block: isBlock2 ? 2 : 1,\n            startRegister: targetStartReg,\n            flag: expectedFlag,\n            timestamp: new Date().toISOString(),\n            registers: configRegs\n        };\n\n        return [outMsg, logMsg];\n    }\n}\n\n// =========================================================================\n// 3. MASTER WRITE ACK: [01, 16, 0B, C3, 00, 01, 02, 00, 00] (FC 16, Reg 3011, Val 0)\n// =========================================================================\nif (fc === 16 && buf[2] === 11 && buf[3] === 195 && buf[4] === 0 && buf[5] === 1) {\n    const prevFlag = flow.get(\"lcd_event_flag\") ?? 0;\n    flow.set(\"lcd_event_flag\", 0);\n    node.status({ fill: \"green\", shape: \"ring\", text: `Ack received (was Flag ${prevFlag}) -> Reset to 0` });\n\n    // FC 16 echo response: [1, 16, 11, 195, 0, 1] (6 bytes, modbus-crc16 will append 243, 209)\n    const resp = Buffer.from([1, 16, 11, 195, 0, 1]);\n\n    const outMsg = { payload: resp };\n    const logMsg = {\n        payload: `Master write ack confirmed, Reg 3011 reset to 0 (cleared flag ${prevFlag})`,\n        event: \"write_ack_confirmed\",\n        timestamp: new Date().toISOString()\n    };\n\n    return [outMsg, logMsg];\n}\n\nreturn null;\n",
         "outputs": 2,
@@ -134,8 +135,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1550,
-        "y": 740,
+        "x": 1740,
+        "y": 960,
         "wires": [
             [
                 "dc82cae3fe2c3a01"
@@ -157,8 +158,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1920,
-        "y": 820,
+        "x": 2280,
+        "y": 920,
         "wires": []
     },
     {
@@ -176,8 +177,8 @@
         "retentionPolicyV18Flux": "",
         "org": "Kadlec",
         "bucket": "HeatPump",
-        "x": 1080,
-        "y": 140,
+        "x": 1200,
+        "y": 200,
         "wires": []
     },
     {
@@ -185,8 +186,8 @@
         "type": "modbus-crc16",
         "z": "1c00011a6f22edfe",
         "name": "",
-        "x": 1720,
-        "y": 740,
+        "x": 2000,
+        "y": 960,
         "wires": [
             [
                 "bc5f22420e490a06",
@@ -206,8 +207,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 280,
-        "y": 180,
+        "x": 400,
+        "y": 240,
         "wires": [
             [
                 "7fce707f5340093f",
@@ -245,8 +246,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 540,
-        "y": 180,
+        "x": 660,
+        "y": 240,
         "wires": []
     },
     {
@@ -261,8 +262,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 680,
-        "y": 240,
+        "x": 800,
+        "y": 300,
         "wires": [
             [
                 "abc4eedfe248121f",
@@ -282,8 +283,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 900,
-        "y": 220,
+        "x": 1020,
+        "y": 280,
         "wires": []
     },
     {
@@ -298,8 +299,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 300,
-        "y": 540,
+        "x": 420,
+        "y": 600,
         "wires": [
             [
                 "9b21b2103f5783a9"
@@ -327,8 +328,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 110,
-        "y": 540,
+        "x": 230,
+        "y": 600,
         "wires": [
             [
                 "a671a68f7d9c1dfb"
@@ -349,8 +350,8 @@
         "correl": "",
         "expiry": "",
         "broker": "69189174c80ee98f",
-        "x": 470,
-        "y": 540,
+        "x": 590,
+        "y": 600,
         "wires": []
     },
     {
@@ -365,8 +366,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1020,
-        "y": 80,
+        "x": 1140,
+        "y": 140,
         "wires": [
             [
                 "f93a909b5a13c395"
@@ -387,8 +388,8 @@
         "correl": "",
         "expiry": "",
         "broker": "69189174c80ee98f",
-        "x": 1190,
-        "y": 80,
+        "x": 1310,
+        "y": 140,
         "wires": []
     },
     {
@@ -403,8 +404,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 840,
-        "y": 460,
+        "x": 960,
+        "y": 520,
         "wires": [
             [
                 "b3facb15c8e4808c"
@@ -423,8 +424,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1080,
-        "y": 460,
+        "x": 1200,
+        "y": 520,
         "wires": []
     },
     {
@@ -439,8 +440,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 860,
-        "y": 500,
+        "x": 980,
+        "y": 560,
         "wires": [
             [
                 "4247ccf6095aede6",
@@ -461,8 +462,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1080,
-        "y": 500,
+        "x": 1200,
+        "y": 560,
         "wires": []
     },
     {
@@ -477,8 +478,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 860,
-        "y": 360,
+        "x": 980,
+        "y": 420,
         "wires": [
             [
                 "cb9649fadfcb1e90"
@@ -497,8 +498,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 860,
-        "y": 400,
+        "x": 980,
+        "y": 460,
         "wires": [
             [
                 "fee2fe5c34fbcc3b",
@@ -519,8 +520,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1100,
-        "y": 360,
+        "x": 1220,
+        "y": 420,
         "wires": []
     },
     {
@@ -535,8 +536,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1100,
-        "y": 400,
+        "x": 1220,
+        "y": 460,
         "wires": []
     },
     {
@@ -551,8 +552,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 830,
-        "y": 720,
+        "x": 950,
+        "y": 780,
         "wires": [
             [
                 "5e1d95ce9285035a"
@@ -571,8 +572,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 850,
-        "y": 760,
+        "x": 970,
+        "y": 820,
         "wires": [
             [
                 "4457b51ba8d9ec77"
@@ -591,8 +592,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1100,
-        "y": 720,
+        "x": 1220,
+        "y": 780,
         "wires": []
     },
     {
@@ -607,8 +608,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1100,
-        "y": 760,
+        "x": 1220,
+        "y": 820,
         "wires": []
     },
     {
@@ -623,8 +624,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 840,
-        "y": 920,
+        "x": 960,
+        "y": 980,
         "wires": [
             [
                 "aa228642fee611e9"
@@ -643,8 +644,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1080,
-        "y": 920,
+        "x": 1200,
+        "y": 980,
         "wires": []
     },
     {
@@ -659,8 +660,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 840,
-        "y": 880,
+        "x": 960,
+        "y": 940,
         "wires": [
             [
                 "1cb1f0fe72429c78"
@@ -679,8 +680,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1060,
-        "y": 880,
+        "x": 1180,
+        "y": 940,
         "wires": []
     },
     {
@@ -753,8 +754,8 @@
         "fanOutMultipleResult": false,
         "setTopic": true,
         "outputs": 1,
-        "x": 1350,
-        "y": 300,
+        "x": 1470,
+        "y": 360,
         "wires": [
             [
                 "d09de823f7be09ed"
@@ -773,8 +774,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1520,
-        "y": 300,
+        "x": 1640,
+        "y": 360,
         "wires": []
     },
     {
@@ -788,8 +789,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 1850,
-        "y": 400,
+        "x": 1970,
+        "y": 460,
         "wires": [
             []
         ]
@@ -806,8 +807,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1310,
-        "y": 400,
+        "x": 1430,
+        "y": 460,
         "wires": [
             [
                 "format_node_01"
@@ -826,8 +827,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1570,
-        "y": 400,
+        "x": 1690,
+        "y": 460,
         "wires": [
             [
                 "43c2bff61b834d5f"
@@ -855,8 +856,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 1570,
-        "y": 360,
+        "x": 1690,
+        "y": 420,
         "wires": [
             [
                 "3ec6077a4401f7cc"
@@ -874,8 +875,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 1810,
-        "y": 360,
+        "x": 1930,
+        "y": 420,
         "wires": [
             []
         ]
@@ -893,8 +894,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1500,
-        "y": 160,
+        "x": 1620,
+        "y": 220,
         "wires": []
     },
     {
@@ -1291,8 +1292,8 @@
         "fanOutMultipleResult": false,
         "setTopic": true,
         "outputs": 1,
-        "x": 830,
-        "y": 180,
+        "x": 950,
+        "y": 240,
         "wires": [
             [
                 "be57d15453704866"
@@ -1311,8 +1312,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1160,
-        "y": 200,
+        "x": 1280,
+        "y": 260,
         "wires": [
             [
                 "b0a712e73bdbccb7",
@@ -1331,8 +1332,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 1390,
-        "y": 200,
+        "x": 1510,
+        "y": 260,
         "wires": [
             []
         ]
@@ -1668,8 +1669,8 @@
         "fanOutMultipleResult": false,
         "setTopic": true,
         "outputs": 1,
-        "x": 600,
-        "y": 80,
+        "x": 720,
+        "y": 140,
         "wires": [
             [
                 "dfc65a3e299152d7",
@@ -1698,8 +1699,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 1370,
-        "y": 120,
+        "x": 1490,
+        "y": 180,
         "wires": [
             [
                 "e3f8ec75eabdeb69"
@@ -1717,8 +1718,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 1590,
-        "y": 120,
+        "x": 1710,
+        "y": 180,
         "wires": [
             []
         ]
@@ -1729,8 +1730,8 @@
         "z": "1c00011a6f22edfe",
         "name": "",
         "info": "Toto jsou jediná místa ve zprávě, kde není nula.\nJediné, co se mění ke item4 mezi 1 a 0.\nNevím, co to znamená, interval je nepravidelný a je několik desítek sekund až minut",
-        "x": 1680,
-        "y": 300,
+        "x": 1800,
+        "y": 360,
         "wires": []
     },
     {
@@ -1739,8 +1740,8 @@
         "z": "1c00011a6f22edfe",
         "name": "",
         "info": "hodnoty všeho v 0 kromě Reg_2012, které je 1",
-        "x": 1560,
-        "y": 200,
+        "x": 1680,
+        "y": 260,
         "wires": []
     },
     {
@@ -1755,8 +1756,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 950,
-        "y": 240,
+        "x": 1070,
+        "y": 300,
         "wires": [
             [
                 "7f308bf97b9f2b2e"
@@ -1774,8 +1775,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 1260,
-        "y": 240,
+        "x": 1380,
+        "y": 300,
         "wires": [
             []
         ]
@@ -1801,8 +1802,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 790,
-        "y": 300,
+        "x": 910,
+        "y": 360,
         "wires": [
             [
                 "41660c9be3c708d5"
@@ -1820,8 +1821,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 1020,
-        "y": 300,
+        "x": 1140,
+        "y": 360,
         "wires": [
             []
         ]
@@ -1838,8 +1839,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1290,
-        "y": 500,
+        "x": 1410,
+        "y": 560,
         "wires": [
             [
                 "f9560b509c726255"
@@ -1858,8 +1859,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1550,
-        "y": 500,
+        "x": 1670,
+        "y": 560,
         "wires": [
             [
                 "dbcacfd8ed574bbd"
@@ -1877,8 +1878,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 1830,
-        "y": 500,
+        "x": 1950,
+        "y": 560,
         "wires": [
             []
         ]
@@ -1904,8 +1905,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 1590,
-        "y": 560,
+        "x": 1710,
+        "y": 620,
         "wires": [
             [
                 "c889bcf31f50f634"
@@ -1923,8 +1924,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 1810,
-        "y": 560,
+        "x": 1970,
+        "y": 620,
         "wires": [
             []
         ]
@@ -2008,8 +2009,8 @@
         "fanOutMultipleResult": false,
         "setTopic": true,
         "outputs": 1,
-        "x": 1580,
-        "y": 460,
+        "x": 1700,
+        "y": 520,
         "wires": [
             [
                 "4b3dea93c0463973"
@@ -2028,8 +2029,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1760,
-        "y": 460,
+        "x": 1880,
+        "y": 520,
         "wires": []
     },
     {
@@ -2038,8 +2039,8 @@
         "z": "1c00011a6f22edfe",
         "name": "",
         "serial": "7450e794f0202cde",
-        "x": 2100,
-        "y": 660,
+        "x": 2400,
+        "y": 960,
         "wires": []
     },
     {
@@ -2059,8 +2060,8 @@
         "drop": false,
         "allowrate": false,
         "outputs": 1,
-        "x": 1910,
-        "y": 660,
+        "x": 2210,
+        "y": 960,
         "wires": [
             [
                 "eb6c2de8d18105a0"
@@ -2079,8 +2080,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 860,
-        "y": 800,
+        "x": 980,
+        "y": 860,
         "wires": [
             [
                 "a3a1ec4971f62b62"
@@ -2099,8 +2100,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1100,
-        "y": 800,
+        "x": 1220,
+        "y": 860,
         "wires": []
     },
     {
@@ -2115,8 +2116,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 870,
-        "y": 560,
+        "x": 990,
+        "y": 620,
         "wires": [
             [
                 "7981d29c494740ad"
@@ -2135,8 +2136,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 900,
-        "y": 640,
+        "x": 1020,
+        "y": 700,
         "wires": [
             [
                 "0e0d692c957fc22b"
@@ -2155,8 +2156,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 880,
-        "y": 600,
+        "x": 1000,
+        "y": 660,
         "wires": [
             [
                 "b1ca0f5dc32895aa"
@@ -2175,8 +2176,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1120,
-        "y": 560,
+        "x": 1240,
+        "y": 620,
         "wires": []
     },
     {
@@ -2191,8 +2192,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1140,
-        "y": 600,
+        "x": 1260,
+        "y": 660,
         "wires": []
     },
     {
@@ -2207,9 +2208,297 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1180,
-        "y": 640,
+        "x": 1300,
+        "y": 700,
         "wires": []
+    },
+    {
+        "id": "comment_lcd_emulation_01",
+        "type": "comment",
+        "z": "1c00011a6f22edfe",
+        "name": "=== LCD EMULATION & CONFIG MODIFIER ===",
+        "info": "Tato sekce obsahuje:\n1. Emulaci LCD displeje (Slave 1) pro komunikaci s Masterem.\n2. Správce konfigurace:\n   - Block 1: 90 int16be registrů 1001-1090 -> FLAG 2\n   - Block 2: 90 int16be registrů 1181-1270 -> FLAG 8\n3. Příklady úpravy parametrů (nastaví flag 2 nebo flag 8 pro vyčtení/zápis Masterem).\n4. Reset a kontrolní dotazy na aktuální registry.",
+        "x": 350,
+        "y": 1120,
+        "wires": []
+    },
+    {
+        "id": "inject_modify_config_01",
+        "type": "inject",
+        "z": "1c00011a6f22edfe",
+        "name": "Příklad: Změna parametrů (Flag 2)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{\"1001\":1}",
+        "payloadType": "json",
+        "x": 340,
+        "y": 1160,
+        "wires": [
+            [
+                "lcd_config_manager_01"
+            ]
+        ]
+    },
+    {
+        "id": "inject_get_config_01",
+        "type": "inject",
+        "z": "1c00011a6f22edfe",
+        "name": "Zobrazit aktuální konfiguraci (Block 1 i Block 2)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "get",
+        "payloadType": "str",
+        "x": 390,
+        "y": 1240,
+        "wires": [
+            [
+                "lcd_config_manager_01"
+            ]
+        ]
+    },
+    {
+        "id": "inject_reset_config_01",
+        "type": "inject",
+        "z": "1c00011a6f22edfe",
+        "name": "Resetovat obě konfigurace na výchozí",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "reset",
+        "payloadType": "str",
+        "x": 370,
+        "y": 1280,
+        "wires": [
+            [
+                "lcd_config_manager_01"
+            ]
+        ]
+    },
+    {
+        "id": "lcd_config_manager_01",
+        "type": "function",
+        "z": "1c00011a6f22edfe",
+        "name": "Modify LCD Config (Block 1 & 2)",
+        "func": "// =========================================================================\n// LCD CONFIGURATION MANAGER & PARSER\n// Correct Mapping:\n// - Block 1: Reg 1001..1090 (3, 233) -> FLAG 2\n// - Block 2: Reg 1181..1270 (4, 157) -> FLAG 8\n// =========================================================================\n\nconst BASE_CONFIG_BYTES_1 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,233,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,\n    0,0,0,0,0,0,0,1,0,5,0,1,0,5,0,30,0,80,0,17,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,50,0,20,0,20,255,56,4,76,1,94,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,32,1,44,0,30,0,110,2,38,1,44,1,24,0,200,0,\n    0,0,0,0,22,0,1,1,194,2,88,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0\n];\n\nconst BASE_CONFIG_BYTES_2 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,157,1,244,0,220,0,200,0,30,0,30,1,144,\n    2,138,0,200,1,244,0,120,0,200,0,0,0,50,0,20,0,45,255,206,0,0,255,106,1,194,\n    2,38,2,38,1,194,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,16,0,1,0,20,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n];\n\nfunction getBaseRegisters(bytes, startReg) {\n    const regs = {};\n    const buf = Buffer.from(bytes);\n    for (let i = 0; i < 90; i++) {\n        regs[startReg + i] = buf.readInt16BE(i * 2);\n    }\n    return regs;\n}\n\n// 1. Initialize or load current registers for both blocks\nlet regsBlock1 = flow.get(\"lcd_config_registers_block1\");\nif (!regsBlock1) {\n    regsBlock1 = getBaseRegisters(BASE_CONFIG_BYTES_1, 1001);\n    flow.set(\"lcd_config_registers_block1\", regsBlock1);\n}\n\nlet regsBlock2 = flow.get(\"lcd_config_registers_block2\");\nif (!regsBlock2) {\n    regsBlock2 = getBaseRegisters(BASE_CONFIG_BYTES_2, 1181);\n    flow.set(\"lcd_config_registers_block2\", regsBlock2);\n}\n\nconst input = msg.payload;\n\n// 2. Command: Reset both blocks to default\nif (input === \"reset\") {\n    regsBlock1 = getBaseRegisters(BASE_CONFIG_BYTES_1, 1001);\n    regsBlock2 = getBaseRegisters(BASE_CONFIG_BYTES_2, 1181);\n    flow.set(\"lcd_config_registers_block1\", regsBlock1);\n    flow.set(\"lcd_config_registers_block2\", regsBlock2);\n    flow.set(\"lcd_event_flag\", 0);\n    node.status({ fill: \"blue\", shape: \"dot\", text: \"Reset both blocks to defaults (Flag: 0)\" });\n    return [{ payload: { block1: regsBlock1, block2: regsBlock2 }, action: \"reset\", flag: 0 }, null];\n}\n\n// 3. Command: Query current configurations\nif (input === \"get\") {\n    const flag = flow.get(\"lcd_event_flag\") ?? 0;\n    node.status({ fill: \"grey\", shape: \"dot\", text: `Configs queried (Current Flag: ${flag})` });\n    return [{ payload: { flag: flag, block1: regsBlock1, block2: regsBlock2 }, action: \"get\" }, null];\n}\n\n// 4. Command: Trigger Start (Flag 2)\nif (input === \"start\" || input === \"Start\") {\n    flow.set(\"lcd_event_flag\", 2);\n    node.status({ fill: \"green\", shape: \"dot\", text: \"Flag: 2 (Start command / Block 1)\" });\n    return [{ payload: { flag: 2, action: \"start\" }, flag: 2 }, null];\n}\n\n// 5. Update configuration: Input object e.g. { \"1040\": 52 } or { \"1191\": 520, \"1192\": 240 }\nif (typeof input === \"object\" && input !== null) {\n    const modifiedB1 = {};\n    const modifiedB2 = {};\n\n    for (const [key, val] of Object.entries(input)) {\n        const regNum = parseInt(key, 10);\n        if (isNaN(regNum)) continue;\n\n        let intVal = parseInt(val, 10);\n        if (isNaN(intVal)) intVal = 0;\n        // Clamp to int16 (-32768 to 32767)\n        if (intVal > 32767) intVal = 32767;\n        if (intVal < -32768) intVal = -32768;\n\n        if (regNum >= 1001 && regNum <= 1090) {\n            regsBlock1[regNum] = intVal;\n            modifiedB1[regNum] = intVal;\n        } else if (regNum >= 1181 && regNum <= 1270) {\n            regsBlock2[regNum] = intVal;\n            modifiedB2[regNum] = intVal;\n        }\n    }\n\n    const countB1 = Object.keys(modifiedB1).length;\n    const countB2 = Object.keys(modifiedB2).length;\n\n    if (countB1 === 0 && countB2 === 0) {\n        node.status({ fill: \"yellow\", shape: \"ring\", text: \"No valid registers in range 1001-1090 or 1181-1270\" });\n        return null;\n    }\n\n    // FLAG MAPPING:\n    // - Block 1 (Reg 1001..1090 / 3, 233) -> FLAG 2\n    // - Block 2 (Reg 1181..1270 / 4, 157) -> FLAG 8\n    let determinedFlag = 2;\n    if (msg.flag !== undefined) {\n        determinedFlag = parseInt(msg.flag, 10);\n    } else if (countB1 > 0 && countB2 === 0) {\n        determinedFlag = 2; // Flag 2 for Block 1 (1001)\n    } else if (countB2 > 0 && countB1 === 0) {\n        determinedFlag = 8; // Flag 8 for Block 2 (1181)\n    } else if (countB1 > 0) {\n        determinedFlag = 2;\n    }\n\n    flow.set(\"lcd_config_registers_block1\", regsBlock1);\n    flow.set(\"lcd_config_registers_block2\", regsBlock2);\n    flow.set(\"lcd_event_flag\", determinedFlag);\n\n    const changedSummary = [];\n    if (countB1 > 0) changedSummary.push(`B1(Flag 2) [${Object.keys(modifiedB1).join(\",\")}]`);\n    if (countB2 > 0) changedSummary.push(`B2(Flag 8) [${Object.keys(modifiedB2).join(\",\")}]`);\n\n    node.status({ fill: \"green\", shape: \"dot\", text: `Flag ${determinedFlag}: Updated ${changedSummary.join(\" \")}` });\n\n    return [\n        {\n            payload: {\n                flag: determinedFlag,\n                modifiedBlock1: modifiedB1,\n                modifiedBlock2: modifiedB2,\n                currentBlock1: regsBlock1,\n                currentBlock2: regsBlock2\n            },\n            flag: determinedFlag\n        },\n        null\n    ];\n}\n\nreturn null;\n",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 890,
+        "y": 1200,
+        "wires": [
+            [
+                "debug_lcd_config_01"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "debug_lcd_config_01",
+        "type": "debug",
+        "z": "1c00011a6f22edfe",
+        "name": "LCD Config Parsed (Block 1 & Block 2)",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1230,
+        "y": 1180,
+        "wires": []
+    },
+    {
+        "id": "debug_lcd_events_01",
+        "type": "debug",
+        "z": "1c00011a6f22edfe",
+        "name": "LCD Emulation Events",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 2020,
+        "y": 920,
+        "wires": []
+    },
+    {
+        "id": "inject_modify_config_block2_01",
+        "type": "inject",
+        "z": "1c00011a6f22edfe",
+        "d": true,
+        "name": "Příklad: Změna parametrů (Flag 8 - Reg 1191: 520, 1192: 240, 1196: 420)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{\"1191\": 520, \"1192\": 240, \"1196\": 420}",
+        "payloadType": "json",
+        "x": 450,
+        "y": 1200,
+        "wires": [
+            [
+                "lcd_config_manager_01"
+            ]
+        ]
+    },
+    {
+        "id": "func_config_diff_logger_01",
+        "type": "function",
+        "z": "1c00011a6f22edfe",
+        "name": "Detect & Log Config Register Changes",
+        "func": "// =========================================================================\n// CONFIGURATION REGISTER CHANGE DETECTOR & LOGGER\n// Supports:\n// - FC 03 Read Responses: [01, 03, B4(180), ...]\n// - FC 16 Write Requests: [01, 10, Addr(2), Qty(2), ByteCount(180), ...]\n// Mapping:\n// - Reg 1001..1090 (3, 233) -> FLAG 2 (Block 1)\n// - Reg 1181..1270 (4, 157) -> FLAG 8 (Block 2)\n// =========================================================================\n\n// Handle manual baseline reset trigger\nif (msg.payload === \"reset_baseline\" || msg.payload === \"reset\") {\n    context.set(\"last_1001\", null);\n    context.set(\"last_1181\", null);\n    node.status({ fill: \"blue\", shape: \"dot\", text: \"Baselines reset: Next packets will be stored as new baselines\" });\n    return null;\n}\n\nlet buf = msg.payload;\nif (!Buffer.isBuffer(buf)) {\n    if (Array.isArray(buf)) {\n        buf = Buffer.from(buf);\n    } else {\n        return null;\n    }\n}\n\n// Safety check: must target Slave 1\nif (buf.length < 5 || buf[0] !== 1) {\n    return null;\n}\n\nconst fc = buf[1];\nlet startReg = null;\nlet dataOffset = null;\nlet msgTypeDesc = \"\";\n\n// -------------------------------------------------------------------------\n// Case 1: FC 03 Read Response: [01, 03, B4(180), <180 data bytes>, CRC]\n// -------------------------------------------------------------------------\nif (fc === 3 && buf[2] === 180 && buf.length >= 183) {\n    dataOffset = 3;\n    msgTypeDesc = \"FC 03 Response\";\n\n    // Confirmation at payload offset 18 (byte 21 in buffer)\n    const conf = buf.readUInt16BE(21);\n    if (conf === 1001) {\n        startReg = 1001; // Flag 2\n    } else if (conf === 1181) {\n        startReg = 1181; // Flag 8\n    } else {\n        const lastReq = flow.get(\"last_requested_config_block\");\n        startReg = (lastReq === 1181) ? 1181 : 1001;\n    }\n}\n// -------------------------------------------------------------------------\n// Case 2: FC 16 Write Multiple: [01, 10, AddrHi, AddrLo, QtyHi, QtyLo, ByteCount(180), <180 data bytes>, CRC]\n// -------------------------------------------------------------------------\nelse if (fc === 16 && buf.length >= 187 && buf[6] === 180) {\n    let addr = buf.readUInt16BE(2);\n    if (addr === 1001 || addr === 1181) {\n        startReg = addr;\n    } else if (buf.length >= 27) {\n        const conf = buf.readUInt16BE(25); // Offset 18 in payload (7 + 18 = 25)\n        if (conf === 1001 || conf === 1181) {\n            startReg = conf;\n        }\n    }\n    if (startReg) {\n        dataOffset = 7;\n        msgTypeDesc = \"FC 16 Write\";\n    }\n}\n\nif (!startReg || dataOffset === null) {\n    return null;\n}\n\n// Block identification & Flag assignment:\n// - Start Reg 1001 (3, 233) -> Block 1 / FLAG 2\n// - Start Reg 1181 (4, 157) -> Block 2 / FLAG 8\nconst assignedFlag = (startReg === 1001) ? 2 : 8;\nconst blockName = (startReg === 1001) \n    ? \"Block 1 (Reg 1001-1090 / Flag 2)\" \n    : \"Block 2 (Reg 1181-1270 / Flag 8)\";\n\n// -------------------------------------------------------------------------\n// 2. Parse all 90 registers (int16 Big-Endian)\n// -------------------------------------------------------------------------\nconst currentRegs = {};\nfor (let i = 0; i < 90; i++) {\n    const regNum = startReg + i;\n    currentRegs[regNum] = buf.readInt16BE(dataOffset + i * 2);\n}\n\n// -------------------------------------------------------------------------\n// 3. Format clean timestamp: YYYY-MM-DD HH:mm:ss\n// -------------------------------------------------------------------------\nconst now = new Date();\nconst timeStamp = now.getFullYear() + \"-\" +\n    (\"0\" + (now.getMonth() + 1)).slice(-2) + \"-\" +\n    (\"0\" + now.getDate()).slice(-2) + \" \" +\n    (\"0\" + now.getHours()).slice(-2) + \":\" +\n    (\"0\" + now.getMinutes()).slice(-2) + \":\" +\n    (\"0\" + now.getSeconds()).slice(-2);\n\n// -------------------------------------------------------------------------\n// 4. Compare with last stored snapshot for this specific block\n// -------------------------------------------------------------------------\nconst lastKey = \"last_\" + startReg;\nconst lastRegs = context.get(lastKey);\n\n// CASE A: Initial Snapshot (First time this block is seen)\nif (!lastRegs) {\n    context.set(lastKey, currentRegs);\n\n    const nonZeros = [];\n    for (let r = startReg; r < startReg + 90; r++) {\n        if (currentRegs[r] !== 0) {\n            nonZeros.push(`Reg ${r}=${currentRegs[r]}`);\n        }\n    }\n\n    const baselineText = `${timeStamp} | [BASELINE STORED] ${blockName} via ${msgTypeDesc} (${nonZeros.length} non-zero): ${nonZeros.join(\", \")}`;\n    node.status({ fill: \"blue\", shape: \"dot\", text: `Baseline stored: ${startReg === 1001 ? \"Block 1 (Flag 2)\" : \"Block 2 (Flag 8)\"}` });\n\n    msg.payload = baselineText;\n    msg.event = \"baseline_stored\";\n    msg.block = startReg;\n    msg.flag = assignedFlag;\n    msg.msgType = msgTypeDesc;\n    msg.registers = currentRegs;\n    return msg;\n}\n\n// CASE B: Subsequent Snapshot (Detect changed registers)\nconst diffs = [];\nfor (let i = 0; i < 90; i++) {\n    const regNum = startReg + i;\n    const oldVal = lastRegs[regNum];\n    const newVal = currentRegs[regNum];\n\n    if (oldVal !== newVal) {\n        const diffVal = newVal - oldVal;\n        const diffStr = diffVal > 0 ? `+${diffVal}` : `${diffVal}`;\n        const oldHex = \"0x\" + (oldVal & 0xFFFF).toString(16).toUpperCase().padStart(4, \"0\");\n        const newHex = \"0x\" + (newVal & 0xFFFF).toString(16).toUpperCase().padStart(4, \"0\");\n\n        diffs.push({\n            register: regNum,\n            oldValue: oldVal,\n            newValue: newVal,\n            diff: diffVal,\n            diffString: diffStr,\n            oldHex: oldHex,\n            newHex: newHex,\n            summary: `Reg ${regNum}: ${oldVal} -> ${newVal} (Diff: ${diffStr} | Hex: ${oldHex}->${newHex})`\n        });\n    }\n}\n\n// Save current state as latest\ncontext.set(lastKey, currentRegs);\n\n// If no registers changed, do not log (avoids spamming log file)\nif (diffs.length === 0) {\n    return null;\n}\n\n// -------------------------------------------------------------------------\n// 5. Construct log line for file & debug output\n// -------------------------------------------------------------------------\nconst diffSummaries = diffs.map(d => d.summary).join(\" | \");\nconst logLine = `${timeStamp} | [CONFIG CHANGED] ${blockName} via ${msgTypeDesc} [${diffs.length} change(s)]: ${diffSummaries}`;\n\nconst changedRegNumbers = diffs.map(d => `Reg ${d.register} (${d.oldValue}->${d.newValue})`).join(\", \");\nnode.status({ fill: \"red\", shape: \"dot\", text: `CHANGED: ${changedRegNumbers}` });\n\nmsg.payload = logLine;\nmsg.event = \"config_changed\";\nmsg.block = startReg;\nmsg.flag = assignedFlag;\nmsg.msgType = msgTypeDesc;\nmsg.diffs = diffs;\nmsg.registers = currentRegs;\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1710,
+        "y": 720,
+        "wires": [
+            [
+                "debug_config_diff_01",
+                "file_config_changes_01"
+            ]
+        ]
+    },
+    {
+        "id": "debug_config_diff_01",
+        "type": "debug",
+        "z": "1c00011a6f22edfe",
+        "name": "Config Register Changes (Diff)",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 2130,
+        "y": 700,
+        "wires": []
+    },
+    {
+        "id": "file_config_changes_01",
+        "type": "file",
+        "z": "1c00011a6f22edfe",
+        "name": "",
+        "filename": "/data/log/config_changes.txt",
+        "filenameType": "str",
+        "appendNewline": true,
+        "createDir": true,
+        "overwriteFile": "false",
+        "encoding": "none",
+        "x": 2120,
+        "y": 740,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "inject_clear_config_log_01",
+        "type": "inject",
+        "z": "1c00011a6f22edfe",
+        "name": "delete",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 1870,
+        "y": 800,
+        "wires": [
+            [
+                "file_delete_config_log_01"
+            ]
+        ]
+    },
+    {
+        "id": "file_delete_config_log_01",
+        "type": "file",
+        "z": "1c00011a6f22edfe",
+        "name": "",
+        "filename": "/data/log/config_changes.txt",
+        "filenameType": "str",
+        "appendNewline": true,
+        "createDir": false,
+        "overwriteFile": "delete",
+        "encoding": "none",
+        "x": 2120,
+        "y": 800,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "inject_reset_diff_baseline_01",
+        "type": "inject",
+        "z": "1c00011a6f22edfe",
+        "name": "Reset diff baseline snapshots",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "reset_baseline",
+        "payloadType": "str",
+        "x": 1600,
+        "y": 780,
+        "wires": [
+            [
+                "func_config_diff_logger_01"
+            ]
+        ]
     },
     {
         "id": "7450e794f0202cde",
@@ -2277,7 +2566,7 @@
         "sessionExpiry": ""
     },
     {
-        "id": "cff6905f8bcb1442",
+        "id": "8bb291211a60ee0a",
         "type": "global-config",
         "env": [],
         "modules": {
@@ -2286,342 +2575,5 @@
             "node-red-contrib-lvin-crc16": "1.0.2",
             "node-red-contrib-buffer-parser": "3.2.2"
         }
-    },
-    {
-        "id": "comment_lcd_emulation_01",
-        "type": "comment",
-        "z": "1c00011a6f22edfe",
-        "name": "=== LCD EMULATION & CONFIG MODIFIER ===",
-        "info": "Tato sekce obsahuje:\n1. Emulaci LCD displeje (Slave 1) pro komunikaci s Masterem.\n2. Správce konfigurace:\n   - Block 1: 90 int16be registrů 1001-1090 -> FLAG 2\n   - Block 2: 90 int16be registrů 1181-1270 -> FLAG 8\n3. Příklady úpravy parametrů (nastaví flag 2 nebo flag 8 pro vyčtení/zápis Masterem).\n4. Reset a kontrolní dotazy na aktuální registry.",
-        "x": 230,
-        "y": 1060,
-        "wires": []
-    },
-    {
-        "id": "inject_modify_config_01",
-        "type": "inject",
-        "z": "1c00011a6f22edfe",
-        "name": "Příklad: Změna parametrů (Flag 2 - Reg 1040: 52, 1045: 380, 1069: 23)",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "{\"1040\": 52, \"1045\": 380, \"1069\": 23}",
-        "payloadType": "json",
-        "x": 330,
-        "y": 1100,
-        "wires": [
-            [
-                "lcd_config_manager_01"
-            ]
-        ]
-    },
-    {
-        "id": "inject_get_config_01",
-        "type": "inject",
-        "z": "1c00011a6f22edfe",
-        "name": "Zobrazit aktuální konfiguraci (Block 1 i Block 2)",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "get",
-        "payloadType": "str",
-        "x": 270,
-        "y": 1180,
-        "wires": [
-            [
-                "lcd_config_manager_01"
-            ]
-        ]
-    },
-    {
-        "id": "inject_reset_config_01",
-        "type": "inject",
-        "z": "1c00011a6f22edfe",
-        "name": "Resetovat obě konfigurace na výchozí",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "reset",
-        "payloadType": "str",
-        "x": 250,
-        "y": 1220,
-        "wires": [
-            [
-                "lcd_config_manager_01"
-            ]
-        ]
-    },
-    {
-        "id": "lcd_config_manager_01",
-        "type": "function",
-        "z": "1c00011a6f22edfe",
-        "name": "Modify LCD Config (Block 1 & 2)",
-        "func": "// =========================================================================\n// LCD CONFIGURATION MANAGER & PARSER\n// Correct Mapping:\n// - Block 1: Reg 1001..1090 (3, 233) -> FLAG 2\n// - Block 2: Reg 1181..1270 (4, 157) -> FLAG 8\n// =========================================================================\n\nconst BASE_CONFIG_BYTES_1 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,233,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,\n    0,0,0,0,0,0,0,1,0,5,0,1,0,5,0,30,0,80,0,17,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,50,0,20,0,20,255,56,4,76,1,94,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,32,1,44,0,30,0,110,2,38,1,44,1,24,0,200,0,\n    0,0,0,0,22,0,1,1,194,2,88,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0\n];\n\nconst BASE_CONFIG_BYTES_2 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,157,1,244,0,220,0,200,0,30,0,30,1,144,\n    2,138,0,200,1,244,0,120,0,200,0,0,0,50,0,20,0,45,255,206,0,0,255,106,1,194,\n    2,38,2,38,1,194,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,16,0,1,0,20,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n];\n\nfunction getBaseRegisters(bytes, startReg) {\n    const regs = {};\n    const buf = Buffer.from(bytes);\n    for (let i = 0; i < 90; i++) {\n        regs[startReg + i] = buf.readInt16BE(i * 2);\n    }\n    return regs;\n}\n\n// 1. Initialize or load current registers for both blocks\nlet regsBlock1 = flow.get(\"lcd_config_registers_block1\");\nif (!regsBlock1) {\n    regsBlock1 = getBaseRegisters(BASE_CONFIG_BYTES_1, 1001);\n    flow.set(\"lcd_config_registers_block1\", regsBlock1);\n}\n\nlet regsBlock2 = flow.get(\"lcd_config_registers_block2\");\nif (!regsBlock2) {\n    regsBlock2 = getBaseRegisters(BASE_CONFIG_BYTES_2, 1181);\n    flow.set(\"lcd_config_registers_block2\", regsBlock2);\n}\n\nconst input = msg.payload;\n\n// 2. Command: Reset both blocks to default\nif (input === \"reset\") {\n    regsBlock1 = getBaseRegisters(BASE_CONFIG_BYTES_1, 1001);\n    regsBlock2 = getBaseRegisters(BASE_CONFIG_BYTES_2, 1181);\n    flow.set(\"lcd_config_registers_block1\", regsBlock1);\n    flow.set(\"lcd_config_registers_block2\", regsBlock2);\n    flow.set(\"lcd_event_flag\", 0);\n    node.status({ fill: \"blue\", shape: \"dot\", text: \"Reset both blocks to defaults (Flag: 0)\" });\n    return [{ payload: { block1: regsBlock1, block2: regsBlock2 }, action: \"reset\", flag: 0 }, null];\n}\n\n// 3. Command: Query current configurations\nif (input === \"get\") {\n    const flag = flow.get(\"lcd_event_flag\") ?? 0;\n    node.status({ fill: \"grey\", shape: \"dot\", text: `Configs queried (Current Flag: ${flag})` });\n    return [{ payload: { flag: flag, block1: regsBlock1, block2: regsBlock2 }, action: \"get\" }, null];\n}\n\n// 4. Command: Trigger Start (Flag 2)\nif (input === \"start\" || input === \"Start\") {\n    flow.set(\"lcd_event_flag\", 2);\n    node.status({ fill: \"green\", shape: \"dot\", text: \"Flag: 2 (Start command / Block 1)\" });\n    return [{ payload: { flag: 2, action: \"start\" }, flag: 2 }, null];\n}\n\n// 5. Update configuration: Input object e.g. { \"1040\": 52 } or { \"1191\": 520, \"1192\": 240 }\nif (typeof input === \"object\" && input !== null) {\n    const modifiedB1 = {};\n    const modifiedB2 = {};\n\n    for (const [key, val] of Object.entries(input)) {\n        const regNum = parseInt(key, 10);\n        if (isNaN(regNum)) continue;\n\n        let intVal = parseInt(val, 10);\n        if (isNaN(intVal)) intVal = 0;\n        // Clamp to int16 (-32768 to 32767)\n        if (intVal > 32767) intVal = 32767;\n        if (intVal < -32768) intVal = -32768;\n\n        if (regNum >= 1001 && regNum <= 1090) {\n            regsBlock1[regNum] = intVal;\n            modifiedB1[regNum] = intVal;\n        } else if (regNum >= 1181 && regNum <= 1270) {\n            regsBlock2[regNum] = intVal;\n            modifiedB2[regNum] = intVal;\n        }\n    }\n\n    const countB1 = Object.keys(modifiedB1).length;\n    const countB2 = Object.keys(modifiedB2).length;\n\n    if (countB1 === 0 && countB2 === 0) {\n        node.status({ fill: \"yellow\", shape: \"ring\", text: \"No valid registers in range 1001-1090 or 1181-1270\" });\n        return null;\n    }\n\n    // FLAG MAPPING:\n    // - Block 1 (Reg 1001..1090 / 3, 233) -> FLAG 2\n    // - Block 2 (Reg 1181..1270 / 4, 157) -> FLAG 8\n    let determinedFlag = 2;\n    if (msg.flag !== undefined) {\n        determinedFlag = parseInt(msg.flag, 10);\n    } else if (countB1 > 0 && countB2 === 0) {\n        determinedFlag = 2; // Flag 2 for Block 1 (1001)\n    } else if (countB2 > 0 && countB1 === 0) {\n        determinedFlag = 8; // Flag 8 for Block 2 (1181)\n    } else if (countB1 > 0) {\n        determinedFlag = 2;\n    }\n\n    flow.set(\"lcd_config_registers_block1\", regsBlock1);\n    flow.set(\"lcd_config_registers_block2\", regsBlock2);\n    flow.set(\"lcd_event_flag\", determinedFlag);\n\n    const changedSummary = [];\n    if (countB1 > 0) changedSummary.push(`B1(Flag 2) [${Object.keys(modifiedB1).join(\",\")}]`);\n    if (countB2 > 0) changedSummary.push(`B2(Flag 8) [${Object.keys(modifiedB2).join(\",\")}]`);\n\n    node.status({ fill: \"green\", shape: \"dot\", text: `Flag ${determinedFlag}: Updated ${changedSummary.join(\" \")}` });\n\n    return [\n        {\n            payload: {\n                flag: determinedFlag,\n                modifiedBlock1: modifiedB1,\n                modifiedBlock2: modifiedB2,\n                currentBlock1: regsBlock1,\n                currentBlock2: regsBlock2\n            },\n            flag: determinedFlag\n        },\n        null\n    ];\n}\n\nreturn null;\n",
-        "outputs": 2,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 770,
-        "y": 1140,
-        "wires": [
-            [
-                "debug_lcd_config_01"
-            ],
-            []
-        ]
-    },
-    {
-        "id": "debug_lcd_config_01",
-        "type": "debug",
-        "z": "1c00011a6f22edfe",
-        "name": "LCD Config Parsed (Block 1 & Block 2)",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 1060,
-        "y": 1140,
-        "wires": []
-    },
-    {
-        "id": "debug_lcd_events_01",
-        "type": "debug",
-        "z": "1c00011a6f22edfe",
-        "name": "LCD Emulation Events",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "true",
-        "targetType": "full",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 1850,
-        "y": 780,
-        "wires": []
-    },
-    {
-        "id": "inject_modify_config_block2_01",
-        "type": "inject",
-        "z": "1c00011a6f22edfe",
-        "name": "Příklad: Změna parametrů (Flag 8 - Reg 1191: 520, 1192: 240, 1196: 420)",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "{\"1191\": 520, \"1192\": 240, \"1196\": 420}",
-        "payloadType": "json",
-        "x": 330,
-        "y": 1140,
-        "wires": [
-            [
-                "lcd_config_manager_01"
-            ]
-        ]
-    },
-    {
-        "id": "func_config_diff_logger_01",
-        "type": "function",
-        "z": "1c00011a6f22edfe",
-        "name": "Detect & Log Config Register Changes",
-        "func": "// =========================================================================\n// CONFIGURATION REGISTER CHANGE DETECTOR & LOGGER\n// Supports:\n// - FC 03 Read Responses: [01, 03, B4(180), ...]\n// - FC 16 Write Requests: [01, 10, Addr(2), Qty(2), ByteCount(180), ...]\n// Mapping:\n// - Reg 1001..1090 (3, 233) -> FLAG 2 (Block 1)\n// - Reg 1181..1270 (4, 157) -> FLAG 8 (Block 2)\n// =========================================================================\n\n// Handle manual baseline reset trigger\nif (msg.payload === \"reset_baseline\" || msg.payload === \"reset\") {\n    context.set(\"last_1001\", null);\n    context.set(\"last_1181\", null);\n    node.status({ fill: \"blue\", shape: \"dot\", text: \"Baselines reset: Next packets will be stored as new baselines\" });\n    return null;\n}\n\nlet buf = msg.payload;\nif (!Buffer.isBuffer(buf)) {\n    if (Array.isArray(buf)) {\n        buf = Buffer.from(buf);\n    } else {\n        return null;\n    }\n}\n\n// Safety check: must target Slave 1\nif (buf.length < 5 || buf[0] !== 1) {\n    return null;\n}\n\nconst fc = buf[1];\nlet startReg = null;\nlet dataOffset = null;\nlet msgTypeDesc = \"\";\n\n// -------------------------------------------------------------------------\n// Case 1: FC 03 Read Response: [01, 03, B4(180), <180 data bytes>, CRC]\n// -------------------------------------------------------------------------\nif (fc === 3 && buf[2] === 180 && buf.length >= 183) {\n    dataOffset = 3;\n    msgTypeDesc = \"FC 03 Response\";\n\n    // Confirmation at payload offset 18 (byte 21 in buffer)\n    const conf = buf.readUInt16BE(21);\n    if (conf === 1001) {\n        startReg = 1001; // Flag 2\n    } else if (conf === 1181) {\n        startReg = 1181; // Flag 8\n    } else {\n        const lastReq = flow.get(\"last_requested_config_block\");\n        startReg = (lastReq === 1181) ? 1181 : 1001;\n    }\n}\n// -------------------------------------------------------------------------\n// Case 2: FC 16 Write Multiple: [01, 10, AddrHi, AddrLo, QtyHi, QtyLo, ByteCount(180), <180 data bytes>, CRC]\n// -------------------------------------------------------------------------\nelse if (fc === 16 && buf.length >= 187 && buf[6] === 180) {\n    let addr = buf.readUInt16BE(2);\n    if (addr === 1001 || addr === 1181) {\n        startReg = addr;\n    } else if (buf.length >= 27) {\n        const conf = buf.readUInt16BE(25); // Offset 18 in payload (7 + 18 = 25)\n        if (conf === 1001 || conf === 1181) {\n            startReg = conf;\n        }\n    }\n    if (startReg) {\n        dataOffset = 7;\n        msgTypeDesc = \"FC 16 Write\";\n    }\n}\n\nif (!startReg || dataOffset === null) {\n    return null;\n}\n\n// Block identification & Flag assignment:\n// - Start Reg 1001 (3, 233) -> Block 1 / FLAG 2\n// - Start Reg 1181 (4, 157) -> Block 2 / FLAG 8\nconst assignedFlag = (startReg === 1001) ? 2 : 8;\nconst blockName = (startReg === 1001) \n    ? \"Block 1 (Reg 1001-1090 / Flag 2)\" \n    : \"Block 2 (Reg 1181-1270 / Flag 8)\";\n\n// -------------------------------------------------------------------------\n// 2. Parse all 90 registers (int16 Big-Endian)\n// -------------------------------------------------------------------------\nconst currentRegs = {};\nfor (let i = 0; i < 90; i++) {\n    const regNum = startReg + i;\n    currentRegs[regNum] = buf.readInt16BE(dataOffset + i * 2);\n}\n\n// -------------------------------------------------------------------------\n// 3. Format clean timestamp: YYYY-MM-DD HH:mm:ss\n// -------------------------------------------------------------------------\nconst now = new Date();\nconst timeStamp = now.getFullYear() + \"-\" +\n    (\"0\" + (now.getMonth() + 1)).slice(-2) + \"-\" +\n    (\"0\" + now.getDate()).slice(-2) + \" \" +\n    (\"0\" + now.getHours()).slice(-2) + \":\" +\n    (\"0\" + now.getMinutes()).slice(-2) + \":\" +\n    (\"0\" + now.getSeconds()).slice(-2);\n\n// -------------------------------------------------------------------------\n// 4. Compare with last stored snapshot for this specific block\n// -------------------------------------------------------------------------\nconst lastKey = \"last_\" + startReg;\nconst lastRegs = context.get(lastKey);\n\n// CASE A: Initial Snapshot (First time this block is seen)\nif (!lastRegs) {\n    context.set(lastKey, currentRegs);\n\n    const nonZeros = [];\n    for (let r = startReg; r < startReg + 90; r++) {\n        if (currentRegs[r] !== 0) {\n            nonZeros.push(`Reg ${r}=${currentRegs[r]}`);\n        }\n    }\n\n    const baselineText = `${timeStamp} | [BASELINE STORED] ${blockName} via ${msgTypeDesc} (${nonZeros.length} non-zero): ${nonZeros.join(\", \")}`;\n    node.status({ fill: \"blue\", shape: \"dot\", text: `Baseline stored: ${startReg === 1001 ? \"Block 1 (Flag 2)\" : \"Block 2 (Flag 8)\"}` });\n\n    msg.payload = baselineText;\n    msg.event = \"baseline_stored\";\n    msg.block = startReg;\n    msg.flag = assignedFlag;\n    msg.msgType = msgTypeDesc;\n    msg.registers = currentRegs;\n    return msg;\n}\n\n// CASE B: Subsequent Snapshot (Detect changed registers)\nconst diffs = [];\nfor (let i = 0; i < 90; i++) {\n    const regNum = startReg + i;\n    const oldVal = lastRegs[regNum];\n    const newVal = currentRegs[regNum];\n\n    if (oldVal !== newVal) {\n        const diffVal = newVal - oldVal;\n        const diffStr = diffVal > 0 ? `+${diffVal}` : `${diffVal}`;\n        const oldHex = \"0x\" + (oldVal & 0xFFFF).toString(16).toUpperCase().padStart(4, \"0\");\n        const newHex = \"0x\" + (newVal & 0xFFFF).toString(16).toUpperCase().padStart(4, \"0\");\n\n        diffs.push({\n            register: regNum,\n            oldValue: oldVal,\n            newValue: newVal,\n            diff: diffVal,\n            diffString: diffStr,\n            oldHex: oldHex,\n            newHex: newHex,\n            summary: `Reg ${regNum}: ${oldVal} -> ${newVal} (Diff: ${diffStr} | Hex: ${oldHex}->${newHex})`\n        });\n    }\n}\n\n// Save current state as latest\ncontext.set(lastKey, currentRegs);\n\n// If no registers changed, do not log (avoids spamming log file)\nif (diffs.length === 0) {\n    return null;\n}\n\n// -------------------------------------------------------------------------\n// 5. Construct log line for file & debug output\n// -------------------------------------------------------------------------\nconst diffSummaries = diffs.map(d => d.summary).join(\" | \");\nconst logLine = `${timeStamp} | [CONFIG CHANGED] ${blockName} via ${msgTypeDesc} [${diffs.length} change(s)]: ${diffSummaries}`;\n\nconst changedRegNumbers = diffs.map(d => `Reg ${d.register} (${d.oldValue}->${d.newValue})`).join(\", \");\nnode.status({ fill: \"red\", shape: \"dot\", text: `CHANGED: ${changedRegNumbers}` });\n\nmsg.payload = logLine;\nmsg.event = \"config_changed\";\nmsg.block = startReg;\nmsg.flag = assignedFlag;\nmsg.msgType = msgTypeDesc;\nmsg.diffs = diffs;\nmsg.registers = currentRegs;\n\nreturn msg;\n",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 1240,
-        "y": 580,
-        "wires": [
-            [
-                "debug_config_diff_01",
-                "file_config_changes_01"
-            ]
-        ]
-    },
-    {
-        "id": "debug_config_diff_01",
-        "type": "debug",
-        "z": "1c00011a6f22edfe",
-        "name": "Config Register Changes (Diff)",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 1560,
-        "y": 560,
-        "wires": []
-    },
-    {
-        "id": "file_config_changes_01",
-        "type": "file",
-        "z": "1c00011a6f22edfe",
-        "name": "",
-        "filename": "/data/log/config_changes.txt",
-        "filenameType": "str",
-        "appendNewline": true,
-        "createDir": true,
-        "overwriteFile": "false",
-        "encoding": "none",
-        "x": 1560,
-        "y": 620,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "inject_clear_config_log_01",
-        "type": "inject",
-        "z": "1c00011a6f22edfe",
-        "name": "delete",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 1230,
-        "y": 680,
-        "wires": [
-            [
-                "file_delete_config_log_01"
-            ]
-        ]
-    },
-    {
-        "id": "file_delete_config_log_01",
-        "type": "file",
-        "z": "1c00011a6f22edfe",
-        "name": "",
-        "filename": "/data/log/config_changes.txt",
-        "filenameType": "str",
-        "appendNewline": true,
-        "createDir": false,
-        "overwriteFile": "delete",
-        "encoding": "none",
-        "x": 1550,
-        "y": 680,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "inject_reset_diff_baseline_01",
-        "type": "inject",
-        "z": "1c00011a6f22edfe",
-        "name": "Reset diff baseline snapshots",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "reset_baseline",
-        "payloadType": "str",
-        "x": 960,
-        "y": 580,
-        "wires": [
-            [
-                "func_config_diff_logger_01"
-            ]
-        ]
-    },
-    {
-        "id": "inject_test_fc16_b1_01",
-        "type": "inject",
-        "z": "1c00011a6f22edfe",
-        "name": "Test: Simulovat FC 16 zápis Block 1 (Flag 2 - Reg 1001)",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "[1, 16, 3, 233, 0, 90, 180, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 233, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 5, 0, 1, 0, 5, 0, 30, 0, 80, 0, 17, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 50, 0, 20, 0, 20, 255, 56, 4, 76, 1, 94, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 32, 1, 44, 0, 30, 0, 110, 2, 38, 1, 44, 1, 24, 0, 200, 0, 0, 0, 0, 0, 22, 0, 1, 1, 194, 2, 88, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]",
-        "payloadType": "json",
-        "x": 880,
-        "y": 620,
-        "wires": [
-            [
-                "func_config_diff_logger_01"
-            ]
-        ]
-    },
-    {
-        "id": "inject_test_fc16_b2_01",
-        "type": "inject",
-        "z": "1c00011a6f22edfe",
-        "name": "Test: Simulovat FC 16 zápis Block 2 (Flag 8 - Reg 1181)",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "[1, 16, 4, 157, 0, 90, 180, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 157, 1, 244, 0, 220, 0, 200, 0, 30, 0, 30, 1, 144, 2, 138, 0, 200, 1, 244, 0, 120, 0, 200, 0, 0, 0, 50, 0, 20, 0, 45, 255, 206, 0, 0, 255, 106, 1, 194, 2, 38, 2, 38, 1, 194, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 16, 0, 1, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]",
-        "payloadType": "json",
-        "x": 880,
-        "y": 660,
-        "wires": [
-            [
-                "func_config_diff_logger_01"
-            ]
-        ]
     }
 ]
