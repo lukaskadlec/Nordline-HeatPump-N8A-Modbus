@@ -11,8 +11,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 880,
-        "y": 100,
+        "x": 1020,
+        "y": 160,
         "wires": []
     },
     {
@@ -21,8 +21,8 @@
         "z": "1c00011a6f22edfe",
         "name": "",
         "serial": "7450e794f0202cde",
-        "x": 160,
-        "y": 260,
+        "x": 300,
+        "y": 300,
         "wires": [
             [
                 "56abaeba7eb333f0",
@@ -43,8 +43,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 320,
-        "y": 360,
+        "x": 480,
+        "y": 420,
         "wires": []
     },
     {
@@ -58,8 +58,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 380,
-        "y": 160,
+        "x": 520,
+        "y": 200,
         "wires": [
             [
                 "full_individual_decoder",
@@ -84,11 +84,10 @@
         "drop": true,
         "allowrate": false,
         "outputs": 1,
-        "x": 880,
-        "y": 160,
+        "x": 1020,
+        "y": 200,
         "wires": [
             [
-                "8772fc93de3fb2d1",
                 "3336ba1e5b1210bb"
             ]
         ]
@@ -114,8 +113,8 @@
         "topic": "",
         "payload": "start_flag_128",
         "payloadType": "str",
-        "x": 1450,
-        "y": 980,
+        "x": 740,
+        "y": 1200,
         "wires": [
             [
                 "b1569ee02102ae62"
@@ -126,6 +125,7 @@
         "id": "b1569ee02102ae62",
         "type": "function",
         "z": "1c00011a6f22edfe",
+        "d": true,
         "name": "LCD Emulator (Slave 1 Responder)",
         "func": "// =========================================================================\n// LCD EMULATOR (SLAVE 1 RESPONDER)\n// Supports 3 Configuration Blocks + Flag 128 (0x8000) Full Sync:\n// - Block 1: Reg 1001..1090 (3, 233) -> FLAG 2\n// - Block 2: Reg 1091..1180 (4, 67)  -> FLAG 4\n// - Block 3: Reg 1181..1270 (4, 157) -> FLAG 8\n// - Full Sync / Reboot: Reg 3011 = 0x8000 (byte 23 = 128) -> All 3 Blocks\n// =========================================================================\n\nconst BASE_CONFIG_BYTES_1 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,233,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,\n    0,0,0,0,0,0,0,1,0,5,0,1,0,5,0,30,0,80,0,17,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,50,0,20,0,20,255,56,4,76,1,94,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,32,1,44,0,30,0,110,2,38,1,44,1,24,0,200,0,\n    0,0,0,0,22,0,1,1,194,2,88,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0\n];\n\nconst BASE_CONFIG_BYTES_2 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,67,0,150,0,250,0,30,0,10,0,59,0,28,0,40,\n    255,106,0,1,0,0,0,70,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,1,0,40,0,5,0,5,1,94,0,0,0,0,0,0,0,100,1,224,0,40,1,224,0,60,0,24,0,5,0,\n    3,0,0,0,0,0,20,0,40,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,138,\n    0,5,0,1,0,30,0,0,0,0,0,0,0,1,0,30,0,3,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0\n];\n\nconst BASE_CONFIG_BYTES_3 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,157,1,244,0,220,0,200,0,30,0,30,1,144,\n    2,138,0,200,1,244,0,120,0,200,0,0,0,50,0,20,0,45,255,206,0,0,255,106,1,194,\n    2,38,2,38,1,194,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,16,0,1,0,20,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n];\n\nfunction getBaseRegisters(bytes, startReg) {\n    const regs = {};\n    const buf = Buffer.from(bytes);\n    for (let i = 0; i < 90; i++) {\n        regs[startReg + i] = buf.readInt16BE(i * 2);\n    }\n    return regs;\n}\n\n// -------------------------------------------------------------------------\n// Handle control commands (startup auto-trigger, manual read_all, start)\n// -------------------------------------------------------------------------\nif (typeof msg.payload === \"string\") {\n    const cmd = msg.payload.toLowerCase();\n    if (cmd === \"start_flag_128\" || cmd === \"read_all\" || cmd === \"flag_128\" || cmd === \"init\") {\n        flow.set(\"lcd_emulator_enabled\", true);\n        flow.set(\"lcd_event_flag\", 0x8000); // 32768 (byte 23 = 128, byte 24 = 0)\n        flow.set(\"lcd_config_initialized\", false);\n        flow.set(\"lcd_sync_status\", \"pending_flag_128\");\n        node.status({ fill: \"yellow\", shape: \"dot\", text: \"Startup: Flag 128 queued (Reading all registers)\" });\n        return null;\n    }\n    if (cmd === \"start\") {\n        if (flow.get(\"lcd_config_initialized\") !== true) {\n            node.warn(\"Cannot start: Configuration not yet initialized by Flag 128!\");\n            node.status({ fill: \"red\", shape: \"ring\", text: \"Blocked: waiting for Flag 128 read-out\" });\n            return null;\n        }\n        flow.set(\"lcd_event_flag\", 2);\n        node.status({ fill: \"green\", shape: \"dot\", text: \"Flag set: 2 (Block 1)\" });\n        return null;\n    }\n}\n\n// Emulation master switch (defaults to true if undefined)\nif (flow.get(\"lcd_emulator_enabled\") === false) {\n    return null;\n}\n\nlet buf = msg.payload;\nif (!Buffer.isBuffer(buf)) {\n    if (Array.isArray(buf)) {\n        buf = Buffer.from(buf);\n    } else {\n        return null;\n    }\n}\n\n// Modbus frame safety check: Must be at least 5 bytes and target Slave 1\nif (buf.length < 5 || buf[0] !== 1) {\n    return null;\n}\n\nconst fc = buf[1];\n\n// =========================================================================\n// 1. MASTER PERIODIC POLL: [01, 03, 0B, B9, 00, 15] (FC 03, Reg 3001, Qty 21)\n// =========================================================================\nif (fc === 3 && buf[2] === 11 && buf[3] === 185 && buf[4] === 0 && buf[5] === 21) {\n    const resp = Buffer.alloc(45);\n    resp[0] = 1;  // Slave 1\n    resp[1] = 3;  // FC 3\n    resp[2] = 42; // Byte Count: 42 (21 registers * 2)\n\n    // Flag: 0=idle, 2=Block 1 (1001), 4=Block 2 (1091), 8=Block 3 (1181), 0x8000 (32768)=Full Read-out\n    const flag = flow.get(\"lcd_event_flag\") ?? 0;\n    resp.writeUInt16BE(flag, 23); // Register 3011 (bytes 23-24)\n\n    // Current Date/Time in Registers 3017-3021 (Big-Endian)\n    const now = new Date();\n    resp.writeUInt16BE(now.getFullYear() % 100, 35); // Reg 3017 (Year)\n    resp.writeUInt16BE(now.getMonth() + 1,      37); // Reg 3018 (Month)\n    resp.writeUInt16BE(now.getDate(),           39); // Reg 3019 (Day)\n    resp.writeUInt16BE(now.getHours(),          41); // Reg 3020 (Hour)\n    resp.writeUInt16BE(now.getMinutes(),        43); // Reg 3021 (Minute)\n\n    if (flag === 0x8000 || flag === 32768) {\n        node.status({ fill: \"yellow\", shape: \"dot\", text: \"Poll replied: Flag 128 (Reading all registers)\" });\n    } else if (flag > 0) {\n        node.status({ fill: \"yellow\", shape: \"dot\", text: `Poll replied (Flag: ${flag})` });\n    } else {\n        node.status({ fill: \"green\", shape: \"dot\", text: \"Poll replied (Idle, Flag 0)\" });\n    }\n\n    const outMsg = { payload: resp };\n    return [outMsg, null]; // Output 1 -> calculate crc -> delay -> serial out\n}\n\n// =========================================================================\n// 2a. MASTER READ SETTINGS: (FC 03, Qty 90 registers / 180 bytes)\n//    - Block 1 (Flag 2): Start Reg 1001 (0x03E9 -> buf[2]=3, buf[3]=233)\n//    - Block 2 (Flag 4): Start Reg 1091 (0x0443 -> buf[2]=4, buf[3]=67)\n//    - Block 3 (Flag 8): Start Reg 1181 (0x049D -> buf[2]=4, buf[3]=157)\n// =========================================================================\nif (fc === 3 && (buf.length >= 6) && (buf[4] === 0 && buf[5] === 90)) {\n    const startReg = buf.readUInt16BE(2);\n    let blockNum = 1;\n    let targetStartReg = 1001;\n\n    if (startReg === 1091 || (startReg !== 1001 && startReg !== 1181 && flow.get(\"lcd_event_flag\") === 4)) {\n        blockNum = 2;\n        targetStartReg = 1091;\n    } else if (startReg === 1181 || (startReg !== 1001 && flow.get(\"lcd_event_flag\") === 8)) {\n        blockNum = 3;\n        targetStartReg = 1181;\n    } else {\n        blockNum = 1;\n        targetStartReg = 1001;\n    }\n\n    const contextKey = \"lcd_config_registers_block\" + blockNum;\n    let configRegs = flow.get(contextKey);\n    if (!configRegs) {\n        const baseBytes = (blockNum === 1) ? BASE_CONFIG_BYTES_1 : ((blockNum === 2) ? BASE_CONFIG_BYTES_2 : BASE_CONFIG_BYTES_3);\n        configRegs = getBaseRegisters(baseBytes, targetStartReg);\n        flow.set(contextKey, configRegs);\n    }\n\n    const resp = Buffer.alloc(183);\n    resp[0] = 1;   // Slave 1\n    resp[1] = 3;   // FC 3\n    resp[2] = 180; // Byte count: 180 (90 registers * 2)\n\n    for (let i = 0; i < 90; i++) {\n        const regNum = targetStartReg + i;\n        const val = (configRegs[regNum] !== undefined) ? configRegs[regNum] : 0;\n        resp.writeInt16BE(val, 3 + i * 2);\n    }\n\n    const flagNum = (blockNum === 1) ? 2 : ((blockNum === 2) ? 4 : 8);\n    const blockName = `Block ${blockNum} (Reg ${targetStartReg}-${targetStartReg + 89}, Flag ${flagNum})`;\n    node.status({ fill: \"blue\", shape: \"dot\", text: `Sent 90 regs: ${blockName}` });\n\n    const outMsg = { payload: resp };\n    const logMsg = {\n        payload: `Master read 90 config registers for ${blockName}`,\n        block: blockNum,\n        startRegister: targetStartReg,\n        flag: flagNum,\n        timestamp: new Date().toISOString(),\n        registers: configRegs\n    };\n\n    return [outMsg, logMsg];\n}\n\n// =========================================================================\n// 2b. MASTER WRITE SETTINGS: (FC 16, Qty 90 registers / 180 bytes)\n//    - Block 1 (Flag 2): Start Reg 1001 (0x03E9 -> buf[2]=3, buf[3]=233)\n//    - Block 2 (Flag 4): Start Reg 1091 (0x0443 -> buf[2]=4, buf[3]=67)\n//    - Block 3 (Flag 8): Start Reg 1181 (0x049D -> buf[2]=4, buf[3]=157)\n// =========================================================================\nif (fc === 16 && buf.length >= 187 && buf[6] === 180) {\n    let startReg = buf.readUInt16BE(2);\n    if (startReg !== 1001 && startReg !== 1091 && startReg !== 1181 && buf.length >= 27) {\n        const conf = buf.readUInt16BE(25);\n        if (conf === 1001 || conf === 1091 || conf === 1181) startReg = conf;\n    }\n\n    if (startReg === 1001 || startReg === 1091 || startReg === 1181) {\n        const blockNum = (startReg === 1001) ? 1 : ((startReg === 1091) ? 2 : 3);\n        const targetStartReg = startReg;\n        const contextKey = \"lcd_config_registers_block\" + blockNum;\n\n        let configRegs = flow.get(contextKey) || {};\n        for (let i = 0; i < 90; i++) {\n            configRegs[targetStartReg + i] = buf.readInt16BE(7 + i * 2);\n        }\n        flow.set(contextKey, configRegs);\n\n        // Track synced blocks during Flag 128\n        let synced = flow.get(\"lcd_synced_blocks\") || {};\n        synced[startReg] = true;\n        flow.set(\"lcd_synced_blocks\", synced);\n\n        // If single block update was pending, clear flag\n        const expectedFlag = (blockNum === 1) ? 2 : ((blockNum === 2) ? 4 : 8);\n        if (flow.get(\"lcd_event_flag\") === expectedFlag) {\n            flow.set(\"lcd_event_flag\", 0);\n        }\n\n        const blockName = `Block ${blockNum} (Reg ${targetStartReg}-${targetStartReg + 89})`;\n        node.status({ fill: \"blue\", shape: \"dot\", text: `FC 16 stored 90 regs: ${blockName}` });\n\n        // Modbus FC 16 confirmation: [1, 16, AddrHi, AddrLo, 0, 90] (CRC appended by calculate crc)\n        const resp = Buffer.from([1, 16, buf[2], buf[3], 0, 90]);\n\n        const outMsg = { payload: resp };\n        const logMsg = {\n            payload: `Master wrote 90 config registers for ${blockName} via FC 16`,\n            block: blockNum,\n            startRegister: targetStartReg,\n            timestamp: new Date().toISOString(),\n            registers: configRegs\n        };\n\n        return [outMsg, logMsg];\n    }\n}\n\n// =========================================================================\n// 3. MASTER WRITE ACK: [01, 16, 0B, C3, 00, 01, 02, 00, 00] (FC 16, Reg 3011, Val 0)\n// =========================================================================\nif (fc === 16 && buf[2] === 11 && buf[3] === 195 && buf[4] === 0 && buf[5] === 1) {\n    const prevFlag = flow.get(\"lcd_event_flag\") ?? 0;\n    flow.set(\"lcd_event_flag\", 0);\n\n    // If we were executing Flag 128 / 0x8000 full read-out, mark initialized!\n    if (prevFlag === 0x8000 || prevFlag === 32768 || prevFlag === 128) {\n        flow.set(\"lcd_config_initialized\", true);\n        flow.set(\"lcd_sync_status\", \"initialized\");\n        node.status({ fill: \"green\", shape: \"dot\", text: \"Flag 128 sync complete: All registers in memory\" });\n    } else {\n        node.status({ fill: \"green\", shape: \"ring\", text: `Ack received (was Flag ${prevFlag}) -> Reset to 0` });\n    }\n\n    // FC 16 echo response: [1, 16, 11, 195, 0, 1] (CRC appended by calculate crc)\n    const resp = Buffer.from([1, 16, 11, 195, 0, 1]);\n\n    const outMsg = { payload: resp };\n    const logMsg = {\n        payload: `Master write ack confirmed, Reg 3011 reset to 0 (cleared flag ${prevFlag})`,\n        event: \"write_ack_confirmed\",\n        config_initialized: flow.get(\"lcd_config_initialized\"),\n        timestamp: new Date().toISOString()\n    };\n\n    return [outMsg, logMsg];\n}\n\nreturn null;",
         "outputs": 2,
@@ -134,8 +134,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1680,
-        "y": 980,
+        "x": 1060,
+        "y": 1220,
         "wires": [
             [
                 "dc82cae3fe2c3a01",
@@ -159,27 +159,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 2220,
-        "y": 940,
-        "wires": []
-    },
-    {
-        "id": "8772fc93de3fb2d1",
-        "type": "influxdb out",
-        "z": "1c00011a6f22edfe",
-        "d": true,
-        "influxdb": "8f5c80c11732a316",
-        "name": "",
-        "measurement": "Nordline",
-        "precision": "",
-        "retentionPolicy": "",
-        "database": "database",
-        "precisionV18FluxV20": "ms",
-        "retentionPolicyV18Flux": "",
-        "org": "Kadlec",
-        "bucket": "HeatPump",
-        "x": 1140,
-        "y": 220,
+        "x": 1540,
+        "y": 1240,
         "wires": []
     },
     {
@@ -187,21 +168,21 @@
         "type": "function",
         "z": "1c00011a6f22edfe",
         "name": "calculate crc",
-        "x": 1960,
-        "y": 980,
-        "wires": [
-            [
-                "bc5f22420e490a06",
-                "1e6bf5b4c1e41252"
-            ]
-        ],
         "func": "// 1. Normalize input: Ensure Buffer\nlet buffer = msg.payload;\nif (Array.isArray(buffer)) {\n    buffer = Buffer.from(buffer);\n} else if (!Buffer.isBuffer(buffer)) {\n    node.error(\"Payload is not a valid buffer or byte array\", msg);\n    return null;\n}\n\nif (buffer.length === 0) {\n    node.warn(\"Payload is empty\");\n    return null;\n}\n\n// 2. Calculate Modbus RTU CRC16 (poly 0xA001, init 0xFFFF)\nlet crc = 0xFFFF;\nfor (let pos = 0; pos < buffer.length; pos++) {\n    crc ^= buffer[pos];\n    for (let i = 8; i !== 0; i--) {\n        if ((crc & 0x0001) !== 0) {\n            crc = (crc >> 1) ^ 0xA001;\n        } else {\n            crc >>= 1;\n        }\n    }\n}\n\n// 3. Extract low and high bytes (Modbus transmits Low Byte first, then High Byte)\nconst low = crc & 0xFF;\nconst high = (crc >> 8) & 0xFF;\n\n// 4. Append 2 CRC bytes to payload buffer\nconst crcBuffer = Buffer.from([low, high]);\nmsg.payload = Buffer.concat([buffer, crcBuffer]);\n\n// Optional metadata\nmsg.crc = crc;\nmsg.crc_bytes = [low, high];\n\n// Update node status display\nconst hexL = low.toString(16).padStart(2, \"0\").toUpperCase();\nconst hexH = high.toString(16).padStart(2, \"0\").toUpperCase();\nnode.status({ fill: \"green\", shape: \"dot\", text: `${msg.payload.length}B (CRC: ${hexL} ${hexH})` });\n\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
-        "libs": []
+        "libs": [],
+        "x": 1330,
+        "y": 1220,
+        "wires": [
+            [
+                "bc5f22420e490a06",
+                "1e6bf5b4c1e41252"
+            ]
+        ]
     },
     {
         "id": "b9266b0544516dfa",
@@ -215,8 +196,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 340,
-        "y": 260,
+        "x": 480,
+        "y": 300,
         "wires": [
             [
                 "7fce707f5340093f",
@@ -246,7 +227,7 @@
         "type": "debug",
         "z": "1c00011a6f22edfe",
         "name": "debug 16",
-        "active": true,
+        "active": false,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
@@ -254,8 +235,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 600,
-        "y": 260,
+        "x": 500,
+        "y": 360,
         "wires": []
     },
     {
@@ -270,8 +251,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 740,
-        "y": 320,
+        "x": 880,
+        "y": 360,
         "wires": [
             [
                 "abc4eedfe248121f",
@@ -291,8 +272,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 960,
-        "y": 300,
+        "x": 1080,
+        "y": 320,
         "wires": []
     },
     {
@@ -307,8 +288,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 360,
-        "y": 620,
+        "x": 500,
+        "y": 660,
         "wires": [
             [
                 "9b21b2103f5783a9"
@@ -336,8 +317,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 170,
-        "y": 620,
+        "x": 310,
+        "y": 660,
         "wires": [
             [
                 "a671a68f7d9c1dfb"
@@ -358,8 +339,8 @@
         "correl": "",
         "expiry": "",
         "broker": "69189174c80ee98f",
-        "x": 530,
-        "y": 620,
+        "x": 670,
+        "y": 660,
         "wires": []
     },
     {
@@ -374,8 +355,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1080,
-        "y": 160,
+        "x": 1220,
+        "y": 200,
         "wires": [
             [
                 "f93a909b5a13c395"
@@ -396,8 +377,8 @@
         "correl": "",
         "expiry": "",
         "broker": "69189174c80ee98f",
-        "x": 1250,
-        "y": 160,
+        "x": 1390,
+        "y": 200,
         "wires": []
     },
     {
@@ -412,8 +393,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 900,
-        "y": 540,
+        "x": 1040,
+        "y": 580,
         "wires": [
             [
                 "b3facb15c8e4808c"
@@ -432,8 +413,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1140,
-        "y": 540,
+        "x": 1280,
+        "y": 580,
         "wires": []
     },
     {
@@ -448,8 +429,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 920,
-        "y": 580,
+        "x": 1060,
+        "y": 620,
         "wires": [
             [
                 "4247ccf6095aede6",
@@ -470,8 +451,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1140,
-        "y": 580,
+        "x": 1280,
+        "y": 620,
         "wires": []
     },
     {
@@ -486,8 +467,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 920,
-        "y": 440,
+        "x": 1060,
+        "y": 480,
         "wires": [
             [
                 "cb9649fadfcb1e90"
@@ -506,8 +487,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 920,
-        "y": 480,
+        "x": 1060,
+        "y": 520,
         "wires": [
             [
                 "fee2fe5c34fbcc3b",
@@ -528,8 +509,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1160,
-        "y": 440,
+        "x": 1300,
+        "y": 480,
         "wires": []
     },
     {
@@ -544,8 +525,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1160,
-        "y": 480,
+        "x": 1320,
+        "y": 520,
         "wires": []
     },
     {
@@ -560,8 +541,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 890,
-        "y": 800,
+        "x": 1030,
+        "y": 840,
         "wires": [
             [
                 "5e1d95ce9285035a"
@@ -580,8 +561,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 910,
-        "y": 840,
+        "x": 1050,
+        "y": 880,
         "wires": [
             [
                 "4457b51ba8d9ec77"
@@ -600,8 +581,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1160,
-        "y": 800,
+        "x": 1300,
+        "y": 840,
         "wires": []
     },
     {
@@ -616,8 +597,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1160,
-        "y": 840,
+        "x": 1300,
+        "y": 880,
         "wires": []
     },
     {
@@ -632,8 +613,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 900,
-        "y": 1000,
+        "x": 1040,
+        "y": 1040,
         "wires": [
             [
                 "aa228642fee611e9"
@@ -652,8 +633,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1140,
-        "y": 1000,
+        "x": 1280,
+        "y": 1040,
         "wires": []
     },
     {
@@ -668,8 +649,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 900,
-        "y": 960,
+        "x": 1040,
+        "y": 1000,
         "wires": [
             [
                 "1cb1f0fe72429c78"
@@ -688,8 +669,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1120,
-        "y": 960,
+        "x": 1260,
+        "y": 1000,
         "wires": []
     },
     {
@@ -762,8 +743,8 @@
         "fanOutMultipleResult": false,
         "setTopic": true,
         "outputs": 1,
-        "x": 1410,
-        "y": 380,
+        "x": 1550,
+        "y": 420,
         "wires": [
             [
                 "d09de823f7be09ed"
@@ -782,8 +763,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1580,
-        "y": 380,
+        "x": 1720,
+        "y": 420,
         "wires": []
     },
     {
@@ -797,8 +778,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 1910,
-        "y": 480,
+        "x": 2050,
+        "y": 520,
         "wires": [
             []
         ]
@@ -815,8 +796,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1370,
-        "y": 480,
+        "x": 1510,
+        "y": 500,
         "wires": [
             [
                 "format_node_01"
@@ -835,8 +816,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1630,
-        "y": 480,
+        "x": 1770,
+        "y": 520,
         "wires": [
             [
                 "43c2bff61b834d5f"
@@ -864,8 +845,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 1630,
-        "y": 440,
+        "x": 1770,
+        "y": 480,
         "wires": [
             [
                 "3ec6077a4401f7cc"
@@ -883,8 +864,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 1870,
-        "y": 440,
+        "x": 2010,
+        "y": 480,
         "wires": [
             []
         ]
@@ -902,8 +883,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1560,
-        "y": 240,
+        "x": 1500,
+        "y": 300,
         "wires": []
     },
     {
@@ -1309,7 +1290,7 @@
         "fanOutMultipleResult": false,
         "setTopic": true,
         "outputs": 1,
-        "x": 890,
+        "x": 850,
         "y": 260,
         "wires": [
             [
@@ -1329,8 +1310,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1220,
-        "y": 280,
+        "x": 1140,
+        "y": 260,
         "wires": [
             [
                 "b0a712e73bdbccb7",
@@ -1349,8 +1330,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 1450,
-        "y": 280,
+        "x": 1390,
+        "y": 260,
         "wires": [
             []
         ]
@@ -1749,8 +1730,8 @@
         "fanOutMultipleResult": false,
         "setTopic": true,
         "outputs": 1,
-        "x": 660,
-        "y": 160,
+        "x": 800,
+        "y": 200,
         "wires": [
             [
                 "dfc65a3e299152d7",
@@ -1779,8 +1760,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 1430,
-        "y": 200,
+        "x": 1610,
+        "y": 260,
         "wires": [
             [
                 "e3f8ec75eabdeb69"
@@ -1798,8 +1779,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 1650,
-        "y": 200,
+        "x": 1830,
+        "y": 260,
         "wires": [
             []
         ]
@@ -1810,18 +1791,8 @@
         "z": "1c00011a6f22edfe",
         "name": "",
         "info": "Toto jsou jediná místa ve zprávě, kde není nula.\nJediné, co se mění ke item4 mezi 1 a 0.\nNevím, co to znamená, interval je nepravidelný a je několik desítek sekund až minut",
-        "x": 1740,
-        "y": 380,
-        "wires": []
-    },
-    {
-        "id": "bef0442f936d9530",
-        "type": "comment",
-        "z": "1c00011a6f22edfe",
-        "name": "",
-        "info": "hodnoty všeho v 0 kromě Reg_2012, které je 1",
-        "x": 1620,
-        "y": 280,
+        "x": 1880,
+        "y": 420,
         "wires": []
     },
     {
@@ -1836,8 +1807,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1010,
-        "y": 320,
+        "x": 1150,
+        "y": 360,
         "wires": [
             [
                 "7f308bf97b9f2b2e"
@@ -1855,8 +1826,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 1320,
-        "y": 320,
+        "x": 1460,
+        "y": 360,
         "wires": [
             []
         ]
@@ -1882,8 +1853,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 850,
-        "y": 380,
+        "x": 990,
+        "y": 420,
         "wires": [
             [
                 "41660c9be3c708d5"
@@ -1901,8 +1872,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 1080,
-        "y": 380,
+        "x": 1220,
+        "y": 420,
         "wires": [
             []
         ]
@@ -1919,8 +1890,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1350,
-        "y": 580,
+        "x": 1490,
+        "y": 620,
         "wires": [
             [
                 "f9560b509c726255"
@@ -1939,8 +1910,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1610,
-        "y": 580,
+        "x": 1750,
+        "y": 620,
         "wires": [
             [
                 "dbcacfd8ed574bbd"
@@ -1958,8 +1929,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 1890,
-        "y": 580,
+        "x": 2030,
+        "y": 620,
         "wires": [
             []
         ]
@@ -1985,8 +1956,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 1650,
-        "y": 640,
+        "x": 1790,
+        "y": 680,
         "wires": [
             [
                 "c889bcf31f50f634"
@@ -2004,8 +1975,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 1910,
-        "y": 640,
+        "x": 2050,
+        "y": 680,
         "wires": [
             []
         ]
@@ -2089,8 +2060,8 @@
         "fanOutMultipleResult": false,
         "setTopic": true,
         "outputs": 1,
-        "x": 1640,
-        "y": 540,
+        "x": 1540,
+        "y": 580,
         "wires": [
             [
                 "4b3dea93c0463973"
@@ -2109,8 +2080,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1820,
-        "y": 540,
+        "x": 1720,
+        "y": 580,
         "wires": []
     },
     {
@@ -2119,8 +2090,8 @@
         "z": "1c00011a6f22edfe",
         "name": "",
         "serial": "7450e794f0202cde",
-        "x": 2340,
-        "y": 980,
+        "x": 1720,
+        "y": 1180,
         "wires": []
     },
     {
@@ -2140,8 +2111,8 @@
         "drop": false,
         "allowrate": false,
         "outputs": 1,
-        "x": 2150,
-        "y": 980,
+        "x": 1530,
+        "y": 1180,
         "wires": [
             [
                 "eb6c2de8d18105a0"
@@ -2160,8 +2131,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 920,
-        "y": 880,
+        "x": 1060,
+        "y": 920,
         "wires": [
             [
                 "a3a1ec4971f62b62"
@@ -2180,8 +2151,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1160,
-        "y": 880,
+        "x": 1300,
+        "y": 920,
         "wires": []
     },
     {
@@ -2196,8 +2167,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 930,
-        "y": 640,
+        "x": 1070,
+        "y": 680,
         "wires": [
             [
                 "7981d29c494740ad"
@@ -2216,8 +2187,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 960,
-        "y": 720,
+        "x": 1100,
+        "y": 760,
         "wires": [
             [
                 "0e0d692c957fc22b"
@@ -2236,8 +2207,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 940,
-        "y": 680,
+        "x": 1080,
+        "y": 720,
         "wires": [
             [
                 "b1ca0f5dc32895aa"
@@ -2249,15 +2220,15 @@
         "type": "debug",
         "z": "1c00011a6f22edfe",
         "name": "debug 13",
-        "active": true,
+        "active": false,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1180,
-        "y": 640,
+        "x": 1320,
+        "y": 680,
         "wires": []
     },
     {
@@ -2265,15 +2236,15 @@
         "type": "debug",
         "z": "1c00011a6f22edfe",
         "name": "debug 14",
-        "active": true,
+        "active": false,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1200,
-        "y": 680,
+        "x": 1340,
+        "y": 720,
         "wires": []
     },
     {
@@ -2281,15 +2252,15 @@
         "type": "debug",
         "z": "1c00011a6f22edfe",
         "name": "debug 15",
-        "active": true,
+        "active": false,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1240,
-        "y": 720,
+        "x": 1380,
+        "y": 760,
         "wires": []
     },
     {
@@ -2298,15 +2269,15 @@
         "z": "1c00011a6f22edfe",
         "name": "=== LCD EMULATION & CONFIG MODIFIER ===",
         "info": "Tato sekce obsahuje:\n1. Emulaci LCD displeje (Slave 1) pro komunikaci s Masterem.\n2. Automatické vyčtení všech parametrů při startu Node-RED:\n   - Po startu Node-RED se automaticky nastaví Flag 128 (0x8000).\n   - Master postupně zapíše všech 270 registrů (Block 1, 2 i 3).\n   - Hodnoty se uloží do paměti flow contextu a slouží jako základ pro další úpravy.\n3. Bezpečnostní pojistka:\n   - Dokud neproběhne inicializace přes Flag 128, úpravy parametrů (Flag 2, 4, 8) jsou BLOKOVÁNY.\n4. Správce konfigurace:\n   - Block 1: 90 registrů 1001-1090 -> FLAG 2\n   - Block 2: 90 registrů 1091-1180 -> FLAG 4\n   - Block 3: 90 registrů 1181-1270 -> FLAG 8\n5. Příklady úpravy parametrů přes inject nody a zobrazení stavu.",
-        "x": 290,
-        "y": 1140,
+        "x": 490,
+        "y": 1380,
         "wires": []
     },
     {
         "id": "inject_modify_config_01",
         "type": "inject",
         "z": "1c00011a6f22edfe",
-        "name": "Příklad: Změna parametrů (Flag 2)",
+        "name": "Příklad: Změna parametrů",
         "props": [
             {
                 "p": "payload"
@@ -2319,8 +2290,8 @@
         "topic": "",
         "payload": "{\"1011\":0}",
         "payloadType": "json",
-        "x": 280,
-        "y": 1180,
+        "x": 570,
+        "y": 1420,
         "wires": [
             [
                 "lcd_config_manager_01"
@@ -2344,8 +2315,8 @@
         "topic": "",
         "payload": "get",
         "payloadType": "str",
-        "x": 330,
-        "y": 1260,
+        "x": 540,
+        "y": 1460,
         "wires": [
             [
                 "lcd_config_manager_01"
@@ -2369,8 +2340,8 @@
         "topic": "",
         "payload": "reset",
         "payloadType": "str",
-        "x": 310,
-        "y": 1300,
+        "x": 530,
+        "y": 1540,
         "wires": [
             [
                 "lcd_config_manager_01"
@@ -2389,8 +2360,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 830,
-        "y": 1220,
+        "x": 950,
+        "y": 1460,
         "wires": [
             [
                 "debug_lcd_config_01",
@@ -2414,8 +2385,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1170,
-        "y": 1200,
+        "x": 1310,
+        "y": 1460,
         "wires": []
     },
     {
@@ -2431,34 +2402,9 @@
         "targetType": "full",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1960,
-        "y": 940,
+        "x": 1360,
+        "y": 1280,
         "wires": []
-    },
-    {
-        "id": "inject_modify_config_block2_01",
-        "type": "inject",
-        "z": "1c00011a6f22edfe",
-        "name": "Příklad: Změna parametrů (Flag 8 / Block 3 - Reg 1191: 520, 1192: 240, 1196: 420)",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "{\"1191\":520}",
-        "payloadType": "json",
-        "x": 270,
-        "y": 1220,
-        "wires": [
-            [
-                "lcd_config_manager_01"
-            ]
-        ]
     },
     {
         "id": "func_config_diff_logger_01",
@@ -2472,8 +2418,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1650,
-        "y": 740,
+        "x": 1070,
+        "y": 1120,
         "wires": [
             [
                 "debug_config_diff_01",
@@ -2494,8 +2440,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 2070,
-        "y": 720,
+        "x": 1390,
+        "y": 1080,
         "wires": []
     },
     {
@@ -2509,8 +2455,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 2060,
-        "y": 760,
+        "x": 1380,
+        "y": 1120,
         "wires": [
             []
         ]
@@ -2532,8 +2478,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 1810,
-        "y": 820,
+        "x": 1610,
+        "y": 1120,
         "wires": [
             [
                 "file_delete_config_log_01"
@@ -2551,8 +2497,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 2060,
-        "y": 820,
+        "x": 1820,
+        "y": 1120,
         "wires": [
             []
         ]
@@ -2574,8 +2520,8 @@
         "topic": "",
         "payload": "reset_baseline",
         "payloadType": "str",
-        "x": 1540,
-        "y": 800,
+        "x": 740,
+        "y": 1120,
         "wires": [
             [
                 "func_config_diff_logger_01"
@@ -2594,28 +2540,185 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 2200,
-        "y": 880,
+        "x": 1320,
+        "y": 1180,
         "wires": []
     },
     {
-        "id": "f70e4411e3f9f81b",
+        "id": "inject_manual_flag_128_01",
+        "type": "inject",
+        "z": "1c00011a6f22edfe",
+        "name": "Manuální vyčtení všech parametrů (Flag 128 / 0x8000)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "read_all",
+        "payloadType": "str",
+        "x": 500,
+        "y": 1500,
+        "wires": [
+            [
+                "lcd_config_manager_01"
+            ]
+        ]
+    },
+    {
+        "id": "comment_ha_mqtt_config_01",
         "type": "comment",
         "z": "1c00011a6f22edfe",
-        "name": "flag 8",
-        "info": "1191 teplota bojler 500 = 50 °C",
-        "x": 630,
-        "y": 1160,
+        "name": "=== HOME ASSISTANT MQTT CONFIGURATION BRIDGE (Reg 1191 & Future) ===",
+        "info": "Provides bidirectional MQTT discovery, retained state publishing, and command reception for heat pump configuration registers.",
+        "x": 470,
+        "y": 1640,
         "wires": []
     },
     {
-        "id": "f6908e58d6fc44a4",
-        "type": "comment",
+        "id": "mqtt_in_ha_config_cmd_01",
+        "type": "mqtt in",
         "z": "1c00011a6f22edfe",
-        "name": "flag 2",
-        "info": "0x1011 0-off 1-on\n0x1012 režim: 0-jen bojler,3-bojler a topení",
-        "x": 630,
-        "y": 1120,
+        "name": "HA Config Set (MQTT In)",
+        "topic": "nodered/heatpump/nodered_heatpump_001/config/+/set",
+        "qos": "0",
+        "datatype": "utf8",
+        "broker": "69189174c80ee98f",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 350,
+        "y": 1700,
+        "wires": [
+            [
+                "func_process_ha_config_cmd_01"
+            ]
+        ]
+    },
+    {
+        "id": "func_process_ha_config_cmd_01",
+        "type": "function",
+        "z": "1c00011a6f22edfe",
+        "name": "Process HA Config Command",
+        "func": "// --- Process incoming configuration change from Home Assistant ---\n// Topic format: nodered/heatpump/nodered_heatpump_001/config/<reg>/set\n// Payload: \"ON\", \"OFF\", \"Heating\", \"50.0\", \"52\", etc.\nconst topic = msg.topic || \"\";\nconst match = topic.match(/\\/config\\/(\\d+)\\/set$/);\n\nif (!match) {\n    node.warn(`Invalid HA config set topic: ${topic}`);\n    return null;\n}\n\nconst reg = parseInt(match[1], 10);\nconst registry = flow.get(\"hp_config_registry\") || {};\nconst def = registry[reg];\n\nif (!def) {\n    node.warn(`Received command for unmapped register: ${reg}`);\n    return null;\n}\n\n// Safety guard: Must be initialized via Flag 128\nconst isInitialized = flow.get(\"lcd_config_initialized\") === true;\nif (!isInitialized) {\n    node.warn(`Change for Reg ${reg} blocked: Parameters not read out via Flag 128 yet!`);\n    node.status({ fill: \"red\", shape: \"ring\", text: `Blocked Reg ${reg}: wait Flag 128` });\n    return null;\n}\n\nconst rawPayload = (msg.payload !== undefined && msg.payload !== null) ? msg.payload.toString().trim() : \"\";\nlet rawVal = 0;\nlet displayVal = rawPayload;\n\nif (def.component === \"switch\") {\n    const upper = rawPayload.toUpperCase();\n    if (upper === \"ON\" || upper === \"1\" || upper === \"TRUE\") {\n        rawVal = 1;\n        displayVal = \"ON\";\n    } else if (upper === \"OFF\" || upper === \"0\" || upper === \"FALSE\") {\n        rawVal = 0;\n        displayVal = \"OFF\";\n    } else {\n        node.warn(`Invalid switch payload for Reg ${reg} (${def.key}): \"${rawPayload}\"`);\n        return null;\n    }\n} else if (def.component === \"select\") {\n    const options = def.options || [];\n    const optIdx = options.findIndex(o => o.toLowerCase() === rawPayload.toLowerCase());\n    if (optIdx !== -1) {\n        rawVal = optIdx;\n        displayVal = options[optIdx];\n    } else {\n        const parsedIdx = parseInt(rawPayload, 10);\n        if (!isNaN(parsedIdx) && parsedIdx >= 0 && parsedIdx < options.length) {\n            rawVal = parsedIdx;\n            displayVal = options[parsedIdx];\n        } else {\n            node.warn(`Invalid select payload for Reg ${reg} (${def.key}): \"${rawPayload}\". Options: ${options.join(\", \")}`);\n            return null;\n        }\n    }\n} else {\n    // Number component (default)\n    let userVal = parseFloat(rawPayload);\n    if (isNaN(userVal)) {\n        node.warn(`Invalid numeric payload for Reg ${reg} (${def.key}): \"${rawPayload}\"`);\n        return null;\n    }\n\n    // Clamp to configured min/max\n    if (def.min !== undefined && userVal < def.min) userVal = def.min;\n    if (def.max !== undefined && userVal > def.max) userVal = def.max;\n\n    // Convert to raw Modbus register integer\n    const scale = def.scale || 1;\n    rawVal = Math.round(userVal / scale);\n    displayVal = userVal;\n}\n\n// Map register to appropriate Flag / Block:\n// - Block 1: Reg 1001..1090 -> Flag 2\n// - Block 2: Reg 1091..1180 -> Flag 4\n// - Block 3: Reg 1181..1270 -> Flag 8\nlet determinedFlag = 2;\nif (reg >= 1001 && reg <= 1090) {\n    determinedFlag = 2;\n} else if (reg >= 1091 && reg <= 1180) {\n    determinedFlag = 4;\n} else if (reg >= 1181 && reg <= 1270) {\n    determinedFlag = 8;\n}\n\nnode.status({ fill: \"green\", shape: \"dot\", text: `Set Reg ${reg} (${def.key}) = ${displayVal} (Raw: ${rawVal}, Flag: ${determinedFlag})` });\n\n// Pass to lcd_config_manager_01\nreturn {\n    payload: {\n        [reg]: rawVal\n    },\n    flag: determinedFlag,\n    source: \"homeassistant\",\n    userValue: displayVal,\n    register: reg\n};\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 640,
+        "y": 1700,
+        "wires": [
+            [
+                "lcd_config_manager_01",
+                "debug_ha_config_cmd_01"
+            ]
+        ]
+    },
+    {
+        "id": "debug_ha_config_cmd_01",
+        "type": "debug",
+        "z": "1c00011a6f22edfe",
+        "name": "HA Config Command Parsed",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 940,
+        "y": 1700,
+        "wires": []
+    },
+    {
+        "id": "inject_publish_config_state_01",
+        "type": "inject",
+        "z": "1c00011a6f22edfe",
+        "name": "Publish Config to HA (MQTT)",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "12",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 1010,
+        "y": 1360,
+        "wires": [
+            [
+                "func_publish_ha_config_01"
+            ]
+        ]
+    },
+    {
+        "id": "func_publish_ha_config_01",
+        "type": "function",
+        "z": "1c00011a6f22edfe",
+        "name": "Publish Config to MQTT (State)",
+        "func": "// --- Publish Heat Pump Configuration Registers to MQTT State ---\nconst baseTopic = \"nodered/heatpump\";\nconst deviceIdentifier = \"nodered_heatpump_001\";\nconst configStateTopic = `${baseTopic}/${deviceIdentifier}/config_state`;\n\n// Ordered list from flow context to guarantee logical priority order (all 109 parameters)\nconst list = flow.get(\"hp_config_list\") || [];\n\n// Check if configuration has been read out from Master via Flag 128\nconst isInit = flow.get(\"lcd_config_initialized\") === true;\nif (!isInit) {\n    node.status({ fill: \"yellow\", shape: \"ring\", text: \"Waiting for Flag 128 init before publishing\" });\n    return null;\n}\n\nconst b1 = flow.get(\"lcd_config_registers_block1\") || {};\nconst b2 = flow.get(\"lcd_config_registers_block2\") || {};\nconst b3 = flow.get(\"lcd_config_registers_block3\") || {};\n\nconst statePayload = {};\nlet count = 0;\n\nfor (const def of list) {\n    const reg = def.reg;\n    let raw = null;\n    if (reg >= 1001 && reg <= 1090) {\n        raw = b1[reg];\n    } else if (reg >= 1091 && reg <= 1180) {\n        raw = b2[reg];\n    } else if (reg >= 1181 && reg <= 1270) {\n        raw = b3[reg];\n    }\n\n    if (raw !== undefined && raw !== null) {\n        if (def.component === \"switch\") {\n            const isStateOn = (raw === 1 || raw === \"1\" || raw === true);\n            const stateStr = isStateOn ? \"ON\" : \"OFF\";\n            statePayload[def.key] = stateStr;\n            statePayload[def.key + \"_num\"] = isStateOn ? 1 : 0;\n        } else if (def.component === \"select\") {\n            const options = def.options || [];\n            const optName = options[raw] !== undefined ? options[raw] : (\"Option \" + raw);\n            statePayload[def.key] = raw;\n            statePayload[def.key + \"_name\"] = optName;\n        } else {\n            // Number component\n            const scale = def.scale || 1;\n            const scaledVal = parseFloat((raw * scale).toFixed(2));\n            statePayload[def.key] = scaledVal;\n        }\n        count++;\n    }\n}\n\nif (count === 0) {\n    node.status({ fill: \"yellow\", shape: \"ring\", text: \"No registers loaded yet\" });\n    return null;\n}\n\nnode.status({ fill: \"green\", shape: \"dot\", text: `Published ${count} config values to HA` });\n\nreturn {\n    topic: configStateTopic,\n    payload: JSON.stringify(statePayload),\n    retain: true\n};\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1350,
+        "y": 1360,
+        "wires": [
+            [
+                "mqtt_out_ha_config_01",
+                "debug_ha_config_state_01"
+            ]
+        ]
+    },
+    {
+        "id": "mqtt_out_ha_config_01",
+        "type": "mqtt out",
+        "z": "1c00011a6f22edfe",
+        "name": "HA Config State (MQTT Out)",
+        "topic": "",
+        "qos": "",
+        "retain": "true",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "69189174c80ee98f",
+        "x": 1660,
+        "y": 1360,
+        "wires": []
+    },
+    {
+        "id": "debug_ha_config_state_01",
+        "type": "debug",
+        "z": "1c00011a6f22edfe",
+        "name": "Config State Published (MQTT)",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1670,
+        "y": 1320,
         "wires": []
     },
     {
@@ -2637,20 +2740,6 @@
         "out": "interbyte",
         "addchar": "",
         "responsetimeout": "1000"
-    },
-    {
-        "id": "8f5c80c11732a316",
-        "type": "influxdb",
-        "hostname": "127.0.0.1",
-        "port": "8086",
-        "protocol": "http",
-        "database": "database",
-        "name": "",
-        "usetls": false,
-        "tls": "",
-        "influxdbVersion": "2.0",
-        "url": "http://localhost:8086",
-        "rejectUnauthorized": true
     },
     {
         "id": "69189174c80ee98f",
@@ -2684,216 +2773,12 @@
         "sessionExpiry": ""
     },
     {
-        "id": "5f7f9177782b228a",
+        "id": "0f8e8c8a4969d54a",
         "type": "global-config",
         "env": [],
         "modules": {
             "node-red-node-serialport": "2.0.3",
-            "node-red-contrib-influxdb": "0.7.0",
-            "node-red-contrib-lvin-crc16": "1.0.2",
             "node-red-contrib-buffer-parser": "3.2.2"
         }
-    },
-    {
-        "id": "inject_modify_config_flag4_01",
-        "type": "inject",
-        "z": "1c00011a6f22edfe",
-        "name": "Příklad: Změna parametrů (Flag 4 / Block 2 - Reg 1101: 150, 1102: 250)",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "{\"1101\":150,\"1102\":250}",
-        "payloadType": "json",
-        "x": 460,
-        "y": 1180,
-        "wires": [
-            [
-                "lcd_config_manager_01"
-            ]
-        ]
-    },
-    {
-        "id": "inject_manual_flag_128_01",
-        "type": "inject",
-        "z": "1c00011a6f22edfe",
-        "name": "Manuální vyčtení všech parametrů (Flag 128 / 0x8000)",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "read_all",
-        "payloadType": "str",
-        "x": 400,
-        "y": 1320,
-        "wires": [
-            [
-                "lcd_config_manager_01"
-            ]
-        ]
-    },
-    {
-        "id": "comment_ha_mqtt_config_01",
-        "type": "comment",
-        "z": "1c00011a6f22edfe",
-        "name": "=== HOME ASSISTANT MQTT CONFIGURATION BRIDGE (Reg 1191 & Future) ===",
-        "info": "Provides bidirectional MQTT discovery, retained state publishing, and command reception for heat pump configuration registers.",
-        "x": 350,
-        "y": 1400,
-        "wires": []
-    },
-    {
-        "id": "mqtt_in_ha_config_cmd_01",
-        "type": "mqtt in",
-        "z": "1c00011a6f22edfe",
-        "name": "HA Config Set (MQTT In)",
-        "topic": "nodered/heatpump/nodered_heatpump_001/config/+/set",
-        "qos": "0",
-        "datatype": "utf8",
-        "broker": "69189174c80ee98f",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 230,
-        "y": 1460,
-        "wires": [
-            [
-                "func_process_ha_config_cmd_01"
-            ]
-        ]
-    },
-    {
-        "id": "func_process_ha_config_cmd_01",
-        "type": "function",
-        "z": "1c00011a6f22edfe",
-        "name": "Process HA Config Command",
-        "func": "// --- Process incoming configuration change from Home Assistant ---\n// Topic format: nodered/heatpump/nodered_heatpump_001/config/<reg>/set\n// Payload: \"ON\", \"OFF\", \"Heating\", \"50.0\", \"52\", etc.\nconst topic = msg.topic || \"\";\nconst match = topic.match(/\\/config\\/(\\d+)\\/set$/);\n\nif (!match) {\n    node.warn(`Invalid HA config set topic: ${topic}`);\n    return null;\n}\n\nconst reg = parseInt(match[1], 10);\nconst registry = flow.get(\"hp_config_registry\") || {};\nconst def = registry[reg];\n\nif (!def) {\n    node.warn(`Received command for unmapped register: ${reg}`);\n    return null;\n}\n\n// Safety guard: Must be initialized via Flag 128\nconst isInitialized = flow.get(\"lcd_config_initialized\") === true;\nif (!isInitialized) {\n    node.warn(`Change for Reg ${reg} blocked: Parameters not read out via Flag 128 yet!`);\n    node.status({ fill: \"red\", shape: \"ring\", text: `Blocked Reg ${reg}: wait Flag 128` });\n    return null;\n}\n\nconst rawPayload = (msg.payload !== undefined && msg.payload !== null) ? msg.payload.toString().trim() : \"\";\nlet rawVal = 0;\nlet displayVal = rawPayload;\n\nif (def.component === \"switch\") {\n    const upper = rawPayload.toUpperCase();\n    if (upper === \"ON\" || upper === \"1\" || upper === \"TRUE\") {\n        rawVal = 1;\n        displayVal = \"ON\";\n    } else if (upper === \"OFF\" || upper === \"0\" || upper === \"FALSE\") {\n        rawVal = 0;\n        displayVal = \"OFF\";\n    } else {\n        node.warn(`Invalid switch payload for Reg ${reg} (${def.key}): \"${rawPayload}\"`);\n        return null;\n    }\n} else if (def.component === \"select\") {\n    const options = def.options || [];\n    const optIdx = options.findIndex(o => o.toLowerCase() === rawPayload.toLowerCase());\n    if (optIdx !== -1) {\n        rawVal = optIdx;\n        displayVal = options[optIdx];\n    } else {\n        const parsedIdx = parseInt(rawPayload, 10);\n        if (!isNaN(parsedIdx) && parsedIdx >= 0 && parsedIdx < options.length) {\n            rawVal = parsedIdx;\n            displayVal = options[parsedIdx];\n        } else {\n            node.warn(`Invalid select payload for Reg ${reg} (${def.key}): \"${rawPayload}\". Options: ${options.join(\", \")}`);\n            return null;\n        }\n    }\n} else {\n    // Number component (default)\n    let userVal = parseFloat(rawPayload);\n    if (isNaN(userVal)) {\n        node.warn(`Invalid numeric payload for Reg ${reg} (${def.key}): \"${rawPayload}\"`);\n        return null;\n    }\n\n    // Clamp to configured min/max\n    if (def.min !== undefined && userVal < def.min) userVal = def.min;\n    if (def.max !== undefined && userVal > def.max) userVal = def.max;\n\n    // Convert to raw Modbus register integer\n    const scale = def.scale || 1;\n    rawVal = Math.round(userVal / scale);\n    displayVal = userVal;\n}\n\n// Map register to appropriate Flag / Block:\n// - Block 1: Reg 1001..1090 -> Flag 2\n// - Block 2: Reg 1091..1180 -> Flag 4\n// - Block 3: Reg 1181..1270 -> Flag 8\nlet determinedFlag = 2;\nif (reg >= 1001 && reg <= 1090) {\n    determinedFlag = 2;\n} else if (reg >= 1091 && reg <= 1180) {\n    determinedFlag = 4;\n} else if (reg >= 1181 && reg <= 1270) {\n    determinedFlag = 8;\n}\n\nnode.status({ fill: \"green\", shape: \"dot\", text: `Set Reg ${reg} (${def.key}) = ${displayVal} (Raw: ${rawVal}, Flag: ${determinedFlag})` });\n\n// Pass to lcd_config_manager_01\nreturn {\n    payload: {\n        [reg]: rawVal\n    },\n    flag: determinedFlag,\n    source: \"homeassistant\",\n    userValue: displayVal,\n    register: reg\n};\n",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 520,
-        "y": 1460,
-        "wires": [
-            [
-                "lcd_config_manager_01",
-                "debug_ha_config_cmd_01"
-            ]
-        ]
-    },
-    {
-        "id": "debug_ha_config_cmd_01",
-        "type": "debug",
-        "z": "1c00011a6f22edfe",
-        "name": "HA Config Command Parsed",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 820,
-        "y": 1460,
-        "wires": []
-    },
-    {
-        "id": "inject_publish_config_state_01",
-        "type": "inject",
-        "z": "1c00011a6f22edfe",
-        "name": "Publish Config to HA (MQTT)",
-        "props": [
-            {
-                "p": "payload"
-            },
-            {
-                "p": "topic",
-                "vt": "str"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": true,
-        "onceDelay": "12",
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 230,
-        "y": 1540,
-        "wires": [
-            [
-                "func_publish_ha_config_01"
-            ]
-        ]
-    },
-    {
-        "id": "func_publish_ha_config_01",
-        "type": "function",
-        "z": "1c00011a6f22edfe",
-        "name": "Publish Config to MQTT (State)",
-        "func": "// --- Publish Heat Pump Configuration Registers to MQTT State ---\nconst baseTopic = \"nodered/heatpump\";\nconst deviceIdentifier = \"nodered_heatpump_001\";\nconst configStateTopic = `${baseTopic}/${deviceIdentifier}/config_state`;\n\n// Ordered list from flow context to guarantee logical priority order (all 109 parameters)\nconst list = flow.get(\"hp_config_list\") || [];\n\n// Check if configuration has been read out from Master via Flag 128\nconst isInit = flow.get(\"lcd_config_initialized\") === true;\nif (!isInit) {\n    node.status({ fill: \"yellow\", shape: \"ring\", text: \"Waiting for Flag 128 init before publishing\" });\n    return null;\n}\n\nconst b1 = flow.get(\"lcd_config_registers_block1\") || {};\nconst b2 = flow.get(\"lcd_config_registers_block2\") || {};\nconst b3 = flow.get(\"lcd_config_registers_block3\") || {};\n\nconst statePayload = {};\nlet count = 0;\n\nfor (const def of list) {\n    const reg = def.reg;\n    let raw = null;\n    if (reg >= 1001 && reg <= 1090) {\n        raw = b1[reg];\n    } else if (reg >= 1091 && reg <= 1180) {\n        raw = b2[reg];\n    } else if (reg >= 1181 && reg <= 1270) {\n        raw = b3[reg];\n    }\n\n    if (raw !== undefined && raw !== null) {\n        if (def.component === \"switch\") {\n            const isStateOn = (raw === 1 || raw === \"1\" || raw === true);\n            const stateStr = isStateOn ? \"ON\" : \"OFF\";\n            statePayload[def.key] = stateStr;\n            statePayload[def.key + \"_num\"] = isStateOn ? 1 : 0;\n        } else if (def.component === \"select\") {\n            const options = def.options || [];\n            const optName = options[raw] !== undefined ? options[raw] : (\"Option \" + raw);\n            statePayload[def.key] = raw;\n            statePayload[def.key + \"_name\"] = optName;\n        } else {\n            // Number component\n            const scale = def.scale || 1;\n            const scaledVal = parseFloat((raw * scale).toFixed(2));\n            statePayload[def.key] = scaledVal;\n        }\n        count++;\n    }\n}\n\nif (count === 0) {\n    node.status({ fill: \"yellow\", shape: \"ring\", text: \"No registers loaded yet\" });\n    return null;\n}\n\nnode.status({ fill: \"green\", shape: \"dot\", text: `Published ${count} config values to HA` });\n\nreturn {\n    topic: configStateTopic,\n    payload: JSON.stringify(statePayload),\n    retain: true\n};\n",
-        "outputs": 1,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 530,
-        "y": 1540,
-        "wires": [
-            [
-                "mqtt_out_ha_config_01",
-                "debug_ha_config_state_01"
-            ]
-        ]
-    },
-    {
-        "id": "mqtt_out_ha_config_01",
-        "type": "mqtt out",
-        "z": "1c00011a6f22edfe",
-        "name": "HA Config State (MQTT Out)",
-        "topic": "",
-        "qos": "",
-        "retain": "true",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "69189174c80ee98f",
-        "x": 820,
-        "y": 1540,
-        "wires": []
-    },
-    {
-        "id": "debug_ha_config_state_01",
-        "type": "debug",
-        "z": "1c00011a6f22edfe",
-        "name": "Config State Published (MQTT)",
-        "active": false,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 830,
-        "y": 1600,
-        "wires": []
     }
 ]
