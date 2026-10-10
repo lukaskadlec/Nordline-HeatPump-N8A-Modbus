@@ -2,8 +2,10 @@
 REVERSE-ENGINEERED RS485 / MODBUS RTU PROTOCOL SPECIFICATION
 NORDLINE / AIR-TO-WATER HEAT PUMP COMMUNICATION BUS
 ================================================================================
-Document Version : 1.0.0
-Author           : Reverse-Engineering & Telemetry Analysis Team
+Document Version : 1.2.0
+Date             : 2026-10-10
+Author           : Reverse-Engineering Team & Manual Synchronization
+Reference Manual : Nordline_N8A_Manual.pdf (PC8002 PCB Controller / 35005-310738 + 35005-310739)
 Target Audience  : AI Coding Assistants (LLMs), Firmware Developers, Home Assistant / ESPHome Integrators
 Format           : Plain Text Reference Specification
 
@@ -18,16 +20,25 @@ TABLE OF CONTENTS
    4.2 Master Broadcast Part B (System Control & Sync - Reg 2091..2180)
    4.3 LCD Display Polling & Heartbeat (Slave 1, Reg 3001..3021)
    4.4 Settings Synchronization Handshake (Display -> Master)
-   4.5 Motor / Inverter Communication (Slaves 4 & 5)
+   4.5 Full System Initialization Handshake (Flag 128 / 0x8000 Full Read-Out)
+   4.6 Motor / Inverter Communication (Slaves 4 & 5)
 5. REGISTER MAPS & BITFIELDS
-   5.1 Broadcast Part A Telemetry Registers
-   5.2 Digital Output (Relay) Bitfield (Byte Offsets 43-44)
-   5.3 LCD Display Polling Frame Structure (Reg 3001..3021)
-   5.4 Settings Data Block 1 (Reg 1001..1090) - Flag 2
-   5.5 Settings Data Block 2 (Reg 1181..1270) - Flag 8
+   5.1 Broadcast Part A Telemetry Registers (Reg 2001..2090)
+   5.2 Digital Output (Relay) Bitfield (Byte Offsets 43-44 / Reg 2019)
+   5.3 Digital Inputs & Safety Switches (Reg 2034 / Byte Offsets 73-74) & Alarm Register (Reg 2085)
+   5.4 LCD Display Polling Frame Structure (Reg 3001..3021)
+   5.5 Settings Data Block 1 (Reg 1001..1090) - Flag 0x0002
+   5.6 Settings Data Block 2 (Reg 1091..1180) - Flag 0x0004
+   5.7 Settings Data Block 3 (Reg 1181..1270) - Flag 0x0008
+   5.8 Main Configuration Registers for User Interface (UI Controls)
+   5.9 Comprehensive Fault & Alarm Code Matrix (Manual Specification)
+   5.10 Controller Hardware, Sensor Types & Terminal Wiring (PC8002 PCB)
 6. STATE MACHINE FOR EMULATING THE LCD CONTROLLER
+   6.1 Operational States & Transitions
+   6.2 Startup Auto-Sync (Flag 128) & Write Protection Guard
 7. PASSIVE SNIFFING & HOME ASSISTANT / MQTT INTEGRATION NOTES
 8. RAW HEX / DECIMAL FRAME EXAMPLES WITH CRC VERIFICATION
+9. PARAMETER DISCOVERY WORKFLOW (DIFF-LOGGING IN NORMAL OPERATION)
 
 
 ================================================================================
@@ -99,8 +110,12 @@ repetition rate. The sequence typically looks as follows:
 2. Broadcast Status Part B (Addr 0, FC 16, Reg 2091, 90 regs / 180 bytes)
 3. Poll LCD Display (Addr 1, FC 03, Reg 3001, 21 regs / 42 bytes)
    -> LCD replies with heartbeat + status/event flag + current real-time clock.
-4. If LCD reported an Event/Change Flag (0x0002 for Block 1 or 0x0008 for Block 2):
-   -> Trigger Settings Read & Write Acknowledge Handshake (see Section 4.4).
+4. If LCD reported an Event/Change Flag in Register 3011:
+   - Flag 0x0002 : Trigger Settings Block 1 sync (Reg 1001..1090)
+   - Flag 0x0004 : Trigger Settings Block 2 sync (Reg 1091..1180)
+   - Flag 0x0008 : Trigger Settings Block 3 sync (Reg 1181..1270)
+   - Flag 0x8000 : Full Initialization / Resync (Reg 1001..1270 across all 3 blocks)
+   -> Master executes the corresponding parameter synchronization handshake.
 5. Poll Secondary Display if configured (Addr 2, FC 03, Reg 3001, 21 regs).
 6. Poll Inverter 1 (Addr 4, FC 03, Reg 1011, 14 regs) -> Inverter 1 replies (28 bytes).
 7. Command Inverter 1 (Addr 4, FC 16, target frequency).
@@ -160,13 +175,14 @@ Format    : [01, 03, 42, <42 data bytes>, <CRC_LOW>, <CRC_HIGH>] (Total 47 bytes
             - Slave ID      : 1
             - Function Code : 3
             - Byte Count    : 42 (0x2A = 21 registers * 2)
-            - Bytes [3..24] : Control & handshake registers (Reg 3001..3011).
-                              Mostly 0x00 during normal idle operation.
-            - Offset 21-22  : After display reboot/reset, byte 22 is 128 (0x8000).
-            - Offset 23-24  : Action / Trigger Register (Reg 3011).
+            - Bytes [3..22] : Control & status registers (Reg 3001..3010). Mostly 0x00.
+            - Offset 23-24  : Action / Trigger Register (Reg 3011, Big-Endian word):
                               * 0x0000 = Normal idle / no change.
-                              * 0x0002 = Settings Block 1 update trigger (Reg 1001..1090, e.g. user setpoints/timers).
-                              * 0x0008 = Settings Block 2 update trigger (Reg 1181..1270, e.g. operational/curve params).
+                              * 0x0002 = Settings Block 1 update trigger (Reg 1001..1090).
+                              * 0x0004 = Settings Block 2 update trigger (Reg 1091..1180).
+                              * 0x0008 = Settings Block 3 update trigger (Reg 1181..1270).
+                              * 0x8000 = Full System Initialization / Resync Trigger (MSB set,
+                                         byte 23 = 128 / 0x80, byte 24 = 0).
             - Bytes [35..44]: Current Real-Time Clock (RTC) broadcasted by the LCD display:
                               * Offset 35-36: Year % 100 (e.g. 26 for 2026)
                               * Offset 37-38: Month (1-12)
@@ -177,62 +193,62 @@ Format    : [01, 03, 42, <42 data bytes>, <CRC_LOW>, <CRC_HIGH>] (Total 47 bytes
 --------------------------------------------------------------------------------
 4.4 Settings Synchronization Handshake (Display -> Master)
 --------------------------------------------------------------------------------
-When settings are modified on the LCD display, the LCD uses Register 3011 (bytes 23-24)
-to notify the Master which configuration block to synchronize:
+When single setting blocks are modified, Register 3011 notifies the Master:
 
 - Block 1 (Flag 0x0002): Master synchronizes 90 registers at start address 1001 (0x03E9).
-- Block 2 (Flag 0x0008): Master synchronizes 90 registers at start address 1181 (0x049D).
+- Block 2 (Flag 0x0004): Master synchronizes 90 registers at start address 1091 (0x0443).
+- Block 3 (Flag 0x0008): Master synchronizes 90 registers at start address 1181 (0x049D).
 
-The handshake sequence:
-
-Step 1: LCD signals changed parameter block via periodic poll response
-        Slave 1 answers the normal poll with Event Flag in Register 3011 (offset 23-24):
-        - For Block 1 update: byte 23-24 = 0x0002
-          Data: [1, 3, 42, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,2, 0,0,0,0,0,0,0,0,0,0,0, 26,0,9,0,30,0,14,0,32, CRC]
-        - For Block 2 update: byte 23-24 = 0x0008
-          Data: [1, 3, 42, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,8, 0,0,0,0,0,0,0,0,0,0,0, 26,0,9,0,30,0,14,0,32, 69,233]
-
-Step 2: Master synchronizes corresponding parameter block
-        Master reads or writes the 90-register block:
-        - If Flag was 0x0002 (Block 1):
-          * FC 03 Read:  [01, 03, 03, 233, 00, 90, 20, 65] (Read 90 regs from 1001)
-          * OR FC 16 Write: [01, 16, 03, 233, 00, 90, 180, <180 bytes>, CRC]
-        - If Flag was 0x0008 (Block 2):
-          * FC 03 Read:  [01, 03, 04, 157, 00, 90, 85, 47] (Read 90 regs from 1181)
-          * OR FC 16 Write: [01, 16, 04, 157, 00, 90, 180, <180 bytes>, CRC]
-
-Step 3: 180 bytes of configuration data transferred
-        - For Block 1: Confirmation 1001 (0x03E9) at payload offset 18.
-        - For Block 2: Confirmation 1181 (0x049D) at payload offset 18.
-
-Step 4: Master acknowledges write and resets the LCD control register
-        Master sends Write Multiple Registers (FC 16 / 0x10) to clear Register 3011:
-        Frame: [01, 16, 11, 195, 00, 01, 02, 00, 00, 13, 163] -> [0x01, 0x10, 0x0B, 0xC3, 0x00, 0x01, 0x02, 0x00, 0x00, 0x0D, 0xA3]
-        - Target Reg    : 3011 (0x0BC3)
-        - Reg Count     : 1 (0x0001)
-        - Byte Count    : 2 (0x02)
-        - Value         : 0x0000 (Clears the trigger byte back to 0)
-
-Step 5: LCD confirms register write
-        LCD returns standard Modbus FC 16 confirmation:
-        Frame: [01, 16, 11, 195, 00, 01, 243, 209] -> [0x01, 0x10, 0x0B, 0xC3, 0x00, 0x01, 0xF3, 0xD1]
-        Handshake is now complete! System returns to normal 1 Hz polling loop.
+Single Block Handshake Flow:
+1. LCD sets Flag (0x0002, 0x0004, or 0x0008) in Register 3011 during poll response.
+2. Master requests parameters via FC 03 Read OR writes parameters via FC 16 Write.
+3. LCD transfers / echoes the 180 bytes of configuration data.
+4. Master sends FC 16 to clear Register 3011: [01, 16, 0B, C3, 00, 01, 02, 00, 00, 0D, A3].
+5. LCD confirms write with FC 16 Echo: [01, 16, 0B, C3, 00, 01, F3, D1].
+Handshake complete; system returns to 1 Hz idle polling.
 
 --------------------------------------------------------------------------------
-4.5 Motor / Inverter Communication (Slaves 4 & 5)
+4.5 Full System Initialization Handshake (Flag 128 / 0x8000 Full Read-Out)
+--------------------------------------------------------------------------------
+When the LCD controller powers on, reboots, or requests a full parameter read-out,
+it sets Register 3011 to 0x8000 (byte 23 = 128, byte 24 = 0).
+
+The Master responds by sequentially transferring ALL THREE parameter blocks
+(270 contiguous registers: 1001 to 1270) via Modbus FC 16:
+
+Step 1: LCD reports Flag 0x8000 in periodic poll response
+        [01, 03, 42, 0,0,..., 128,0, ..., RTC, CRC]
+
+Step 2: Master writes Block 1 (Reg 1001..1090)
+        Master -> LCD: [01, 16, 03, E9, 00, 5A, B4, <180 bytes>, CRC]
+        LCD -> Master: [01, 16, 03, E9, 00, 5A, CRC] (Confirmation echo)
+
+Step 3: Master writes Block 2 (Reg 1091..1180)
+        Master -> LCD: [01, 16, 04, 43, 00, 5A, B4, <180 bytes>, CRC]
+        LCD -> Master: [01, 16, 04, 43, 00, 5A, CRC] (Confirmation echo)
+
+Step 4: Master writes Block 3 (Reg 1181..1270)
+        Master -> LCD: [01, 16, 04, 9D, 00, 5A, B4, <180 bytes>, CRC]
+        LCD -> Master: [01, 16, 04, 9D, 00, 5A, CRC] (Confirmation echo)
+
+Step 5: Master clears Register 3011 back to 0
+        Master -> LCD: [01, 16, 0B, C3, 00, 01, 02, 00, 00, CRC]
+        LCD -> Master: [01, 16, 0B, C3, 00, 01, CRC] (Confirmation echo)
+
+All 270 configuration parameters are now fully synchronized into memory!
+
+--------------------------------------------------------------------------------
+4.6 Motor / Inverter Communication (Slaves 4 & 5)
 --------------------------------------------------------------------------------
 1. Polling Inverter 1 (Compressor motor driver):
    Master -> Slave 4: [04, 03, 03, 243, 00, 14, CRC_L, CRC_H]
-   - Addr: 4, FC: 3, Start: 1011 (0x03F3), Qty: 14 registers.
    Slave 4 -> Master: [04, 03, 28, <28 bytes data>, CRC_L, CRC_H]
-   - Returns operating frequency, currents, voltages, heatsink temperature.
 
 2. Controlling Inverter 1 (Frequency command):
    Master -> Slave 4: [04, 16, 03, ...] (FC 16 write targeting frequency setpoint).
 
 3. Polling Inverter 2 (Fan motor driver):
    Master -> Slave 5: [05, 03, 03, 243, 00, 14, CRC_L, CRC_H]
-   - Addr: 5, FC: 3, Start: 1011 (0x03F3), Qty: 14 registers.
    Slave 5 -> Master: [05, 03, 28, <28 bytes data>, CRC_L, CRC_H]
 
 
@@ -243,58 +259,55 @@ Step 5: LCD confirms register write
 --------------------------------------------------------------------------------
 5.1 Broadcast Part A Telemetry Registers (Reg 2001..2090)
 --------------------------------------------------------------------------------
-Note: Offsets in the table below are measured from the START of the 189-byte Modbus
-frame (Byte 0 = Slave Addr 0x00, Byte 1 = FC 0x10, Byte 2..3 = Addr 0x07D1,
-Byte 4..5 = Qty 0x005A, Byte 6 = ByteCount 0xB4, Byte 7 = Start of Register 2001).
-
-Offset | Modbus Reg | Name / Description              | Type     | Scale / Unit
--------+------------+---------------------------------+----------+-----------------
-7      | 2001       | Raw Status / Mode Param 1       | int16_be | raw
-9      | 2002       | Raw Status / Mode Param 2       | int16_be | raw
-11     | 2003       | Raw Status / Mode Param 3       | int16_be | raw
-13     | 2004       | Raw Status / Mode Param 4       | int16_be | raw
-15     | 2005       | Raw Status / Mode Param 5       | int16_be | raw
-17     | 2006       | Raw Status / Mode Param 6       | int16_be | raw
-19     | 2007       | Raw Status / Mode Param 7       | int16_be | raw
-21     | 2008       | Raw Status / Mode Param 8       | int16_be | raw
-23     | 2009       | Raw Status / Mode Param 9       | int16_be | raw
-25     | 2010       | Raw Status / Mode Param 10      | int16_be | raw
-27     | 2011       | Main ON / OFF State Switch      | int16_be | 0=Off, 1=On
-29     | 2012       | Operation Mode Flag (Constant 1)| int16_be | raw
-31..41 | 2013..2018 | Internal Operational States     | int16_be | raw
-43     | 2019 (MSB) | Digital Outputs Part 2 (Relays) | bitfield | See Section 5.2
-44     | 2019 (LSB) | Digital Outputs Part 1 (Relays) | bitfield | See Section 5.2
-45     | 2020       | Electronic Expansion Valve(EVV) | int16_be | steps / opening
-47..71 | 2021..2033 | Secondary Status Parameters     | int16_be | raw
-73     | 2034       | Operating State Flags (bit 3..) | int16_be | bitfield
-75..93 | 2035..2044 | Internal Control Statuses       | int16_be | raw
-95     | 2045       | Water Inlet Temp (Teplota vstup)| int16_be | 0.1 °C (/10)
-97     | 2046       | Water Outlet Temp(Teplota vystup| int16_be | 0.1 °C (/10)
-99     | 2047       | Discharge Temp (Teplota vytlak) | int16_be | 0.1 °C (/10)
-101    | 2048       | DHW Boiler Temp (Teplota bojler)| int16_be | 0.1 °C (/10)
-103    | 2049       | Suction Temp (Teplota sani)     | int16_be | 0.1 °C (/10)
-105    | 2050       | Evaporator Temp(Teplota vyparnik| int16_be | 0.1 °C (/10)
-107    | 2051       | Ambient Temp (Teplota okoli)    | int16_be | 0.1 °C (/10)
-109    | 2052       | Suction Pressure (Tlak sani)    | int16_be | 0.1 bar (/10)
-111    | 2053       | Discharge Pressure(Tlak vytlak) | int16_be | 0.1 bar (/10)
-113    | 2054       | Target Frequency (Frekvence set)| int16_be | 1.0 Hz
-115    | 2055       | Actual Frequency(Frekvence skut)| int16_be | 1.0 Hz
-117    | 2056       | Actual Fan Speed                | uint16_be| rpm
-121    | 2058       | Suction Superheat(Prehrati sani)| int16_be | 0.1 °C (/10)
-123    | 2059       | Discharge Superheat(Preh. vytlak| int16_be | 0.1 °C (/10)
-125    | 2060       | Inverter Module Prot. Temp      | int16_be | 0.1 °C (/10)
-127    | 2061       | AC Input Voltage (AC vstup nap.)| uint16_be| 1.0 V
-129    | 2062       | AC Input Current (AC vstup proud| uint16_be| 0.1 A (/10)
-131    | 2063       | Compressor Phase Current        | uint16_be| 0.1 A (/10)
-133    | 2064       | DC Bus Voltage (Napeti sbernice)| uint16_be| 1.0 V
-135    | 2065       | Inverter Temp (Teplota invertor)| int16_be | 0.1 °C (/10)
-137    | 2066       | Target Fan Speed (Nast. rychlost| uint16_be| rpm
+Offset  | Modbus Reg | Name / Description               | Type     | Scale / Unit
+--------+------------+----------------------------------+----------+-----------------
+7       | 2001       | Raw Status / Mode Param 1        | int16_be | raw
+9       | 2002       | Raw Status / Mode Param 2        | int16_be | raw
+11      | 2003       | Raw Status / Mode Param 3        | int16_be | raw
+13      | 2004       | Raw Status / Mode Param 4        | int16_be | raw
+15      | 2005       | Raw Status / Mode Param 5        | int16_be | raw
+17      | 2006       | Raw Status / Mode Param 6        | int16_be | raw
+19      | 2007       | Raw Status / Mode Param 7        | int16_be | raw
+21      | 2008       | Raw Status / Mode Param 8        | int16_be | raw
+23      | 2009       | Raw Status / Mode Param 9        | int16_be | raw
+25      | 2010       | Raw Status / Mode Param 10       | int16_be | raw
+27      | 2011       | Main ON / OFF State Switch       | int16_be | 0=Off, 1=On
+29      | 2012       | Operation Mode Flag (Constant 1) | int16_be | raw
+31..41  | 2013..2018 | Internal Operational States      | int16_be | raw
+43      | 2019 (MSB) | Digital Outputs Part 2 (Relays)  | bitfield | See Section 5.2
+44      | 2019 (LSB) | Digital Outputs Part 1 (Relays)  | bitfield | See Section 5.2
+45      | 2020       | Electronic Expansion Valve (EEV) | int16_be | steps / opening
+47..71  | 2021..2033 | Secondary Status Parameters      | int16_be | raw
+73..74  | 2034       | Digital Inputs (S01..S07)        | bitfield | See Section 5.3
+75..93  | 2035..2044 | Internal Control Statuses        | int16_be | raw
+95      | 2045       | Water Inlet Temp (T01 / Inlet)   | int16_be | 0.1 °C (/10)
+97      | 2046       | Water Outlet Temp (T02 / Outlet) | int16_be | 0.1 °C (/10)
+99      | 2047       | Discharge Temp (T03 / Discharge) | int16_be | 0.1 °C (/10)
+101     | 2048       | DHW Boiler Temp (T04 / Boiler)   | int16_be | 0.1 °C (/10)
+103     | 2049       | Suction Temp (T05 / Suction)     | int16_be | 0.1 °C (/10)
+105     | 2050       | Evaporator Temp (T06 / Evap)     | int16_be | 0.1 °C (/10)
+107     | 2051       | Ambient Temp (T07 / Ambient)     | int16_be | 0.1 °C (/10)
+109     | 2052       | Suction Pressure (T08 / Suct.P)  | int16_be | 0.1 bar (/10)
+111     | 2053       | Discharge Press. (T09 / Disch.P) | int16_be | 0.1 bar (/10)
+113     | 2054       | Actual Frequency (T10 / Actual)  | int16_be | 1.0 Hz (Corrected: Actual Hz)
+115     | 2055       | Target Frequency (T11 / Target)  | int16_be | 1.0 Hz (Corrected: Target Hz)
+117     | 2056       | Fan Motor 1 Actual Speed (T12)   | uint16_be| rpm
+119     | 2057       | Fan Motor 2 Actual Speed (T13)   | uint16_be| rpm (Added from Manual)
+121     | 2058       | Suction Superheat (T14 / Suct.)  | int16_be | 0.1 °C (/10)
+123     | 2059       | Discharge Superheat (T15 / Dis.) | int16_be | 0.1 °C (/10)
+125     | 2060       | Inverter Module Prot. Temp (T16) | int16_be | 0.1 °C (/10)
+127     | 2061       | AC Input Voltage (T17 / Volt)    | uint16_be| 1.0 V
+129     | 2062       | AC Input Current (T18 / Current) | uint16_be| 0.1 A (/10)
+131     | 2063       | Compressor Phase Current (T19)   | uint16_be| 0.1 A (/10)
+133     | 2064       | DC Bus Voltage (T20 / DC Bus)    | uint16_be| 1.0 V
+135     | 2065       | Inverter Temp IPM/PIM (T21)      | int16_be | 0.1 °C (/10)
+137     | 2066       | Secondary Fan / Inverter Status  | uint16_be| raw
+139     | 2067       | Target Fan Speed (T22 / Target)  | uint16_be| rpm (Reg 2067 in Manual)
+175..176| 2085       | Active Alarm / Fault Code Reg.   | uint16_be| See Section 5.9
 
 --------------------------------------------------------------------------------
 5.2 Digital Output (Relay) Bitfield (Byte Offsets 43-44)
 --------------------------------------------------------------------------------
-These 16 bits directly report the hardware states of all actuator relays and outputs:
-
 Byte Offset 44 (Lower Byte / Relay Group 1):
   Bit 0 (0x01) : Compressor (O01)                         [1 = ON, 0 = OFF]
   Bit 1 (0x02) : Primary Circulation Water Pump (O02)     [1 = ON, 0 = OFF]
@@ -314,7 +327,37 @@ Byte Offset 43 (Upper Byte / Relay Group 2):
   Bit 5..7     : Reserved
 
 --------------------------------------------------------------------------------
-5.3 LCD Display Polling Frame Structure (Reg 3001..3021)
+5.3 Digital Inputs & Safety Switches (Reg 2034) & Alarm Register (Reg 2085)
+--------------------------------------------------------------------------------
+[CRITICAL PROTOCOL CORRECTION]:
+Early telemetry analysis speculated that physical switches S01..S08 resided in
+Register 2085 (Byte Offset 176). The official Nordline N8A manufacturer manual
+(pages 28-29, 37) conclusively clarifies that the hardware digital safety switches
+reside in Register 2034 (Byte Offsets 73-74, where payload byte 67 is LSB), while
+Register 2085 carries the active numerical Alarm Code / Fault ID.
+
+Register 2034 Bitfield (Hardware Digital Inputs / Safety Switches S01..S07):
+Byte Offset 74 (Register 2034 Lower Byte / LSB):
+  Bit 0 (0x01 / 2034/0) : High Pressure Switch (S01 / AI/DI 23)   [0 = Closed/OK, 1 = Open/Trip]
+  Bit 1 (0x02 / 2034/1) : Low Pressure Switch (S02 / AI/DI 24)    [0 = Closed/OK, 1 = Open/Trip]
+  Bit 2 (0x04 / 2034/2) : Water Flow Switch (S03 / AI/DI 25)      [0 = Closed/Flow OK, 1 = Open/No Flow]
+  Bit 3 (0x08 / 2034/3) : Emergency / Remote Switch (S04 / AI/DI 26)[0 = Closed/Run, 1 = Open/Stop]
+  Bit 4 (0x10 / 2034/4) : Mode Switch (S05 / AI/DI 27)            [0 = Closed/Heating, 1 = Open/Cooling]
+  Bit 5 (0x20 / 2034/5) : Reserved (S06)
+  Bit 6 (0x40 / 2034/6) : Heater Overload Switch (S07 / AI/DI 29) [0 = Closed/OK, 1 = Open/Trip]
+  Bit 7 (0x80 / 2034/7) : Reserved (S08)
+
+Byte Offset 73 (Register 2034 Upper Byte / MSB):
+  Bits 8..15            : Controller internal binary status flags.
+
+Active Fault Register (Register 2085 / Byte Offsets 175-176):
+  Carries the active numerical error / protection code when an alarm trips.
+  Offset 175 (MSB) : Alarm Category / Sub-code
+  Offset 176 (LSB) : Fault Identifier Code (Mapped to Fault Codes in Section 5.9:
+                     e.g. E11 = High Pressure, E12 = Low Pressure, E032 = Flow Error, F01..F26 = Inverter).
+
+--------------------------------------------------------------------------------
+5.4 LCD Display Polling Frame Structure (Reg 3001..3021)
 --------------------------------------------------------------------------------
 Full Response Buffer Length = 47 bytes (Header 3 bytes + 42 data bytes + 2 CRC bytes).
 
@@ -323,11 +366,14 @@ Offset | Modbus Reg | Function / Description
 0      | -          | Slave Address: 0x01
 1      | -          | Function Code: 0x03
 2      | -          | Byte Count: 0x2A (42 bytes)
-3..22  | 3001..3010 | Reserved / Status words (mostly 0x0000; byte 22 is 0x80 on boot)
-23..24 | 3011       | Trigger / Notification Register:
+3..22  | 3001..3010 | Reserved / Status words (mostly 0x0000)
+23..24 | 3011       | Trigger / Notification Register (Big-Endian word):
        |            |   0x0000 = Idle / Standby (Normal heartbeat)
        |            |   0x0002 = Settings Block 1 Update Trigger (Reg 1001..1090)
-       |            |   0x0008 = Settings Block 2 Update Trigger (Reg 1181..1270)
+       |            |   0x0004 = Settings Block 2 Update Trigger (Reg 1091..1180)
+       |            |   0x0008 = Settings Block 3 Update Trigger (Reg 1181..1270)
+       |            |   0x8000 = Full System Initialization / Resync Trigger
+       |            |            (MSB set, byte 23 = 128 / 0x80, byte 24 = 0)
 25..34 | 3012..3016 | Reserved (zeros)
 35..36 | 3017       | Real-Time Clock: Year % 100 (e.g. 26 -> 2026)
 37..38 | 3018       | Real-Time Clock: Month (1 - 12)
@@ -337,107 +383,463 @@ Offset | Modbus Reg | Function / Description
 45..46 | -          | Modbus CRC-16 (Low byte, High byte)
 
 --------------------------------------------------------------------------------
-5.4 Settings Data Block 1 (Reg 1001..1090) - Triggered by Flag 0x0002
+5.5 Settings Data Block 1 (Reg 1001..1090) - Triggered by Flag 0x0002
 --------------------------------------------------------------------------------
-Queried by Master via FC 03: Start Address = 1001 (0x03E9), Quantity = 90 registers.
-(Or written via FC 16: [01, 16, 03, 233, 00, 90, 180, ...])
-Returned by LCD: 180 bytes containing user configurable setpoints:
+Queried / Written via FC 03 or FC 16: Start Address = 1001 (0x03E9), Quantity = 90 registers.
+Contains System Configuration (H), Safety & Protection (A), Fan & Quiet Mode (F),
+and Primary User Interface Controls:
 - Reg 1010: Start address confirmation = 1001 (0x03E9)
-- Reg 1040: DHW setpoint / base target temp (e.g. 50 °C)
-- Reg 1043: Ambient temp lower limit for heating curve (e.g. -20.0 °C)
-- Reg 1045: Heating water setpoint (e.g. 35.0 °C)
-- Reg 1060: Target temperature limit (e.g. 30.0 °C)
-- Reg 1069: Room temperature setpoint (e.g. 22 °C)
-- Reg 1071: Heating circuit target (e.g. 45.0 °C)
-- Reg 1072: Maximum allowed temperature limit (e.g. 60.0 °C)
+- Reg 1011: State - Main Power Switch (0 = Off, 1 = On) [UI Main Control]
+- Reg 1012: Mode - Operating Mode (0 = Hot Water, 1 = Heating, 2 = Cooling, 
+            3 = Hot Water + Heating, 4 = Hot Water + Cooling) [UI Main Control]
+- Reg 1018: Auto start (H01: enum 0=No, 1=Yes)
+- Reg 1019: Master/Slave Unit (H02: enum 0=Master, 1=Slave)
+- Reg 1020: Temperature Unit (H03: enum 0=°C, 1=°F)
+- Reg 1021: 4-way Valve Polarity (H04: enum 0=On-heating, 1=Off-heating)
+- Reg 1022: 3-way Valve Polarity (H05: enum 0=On-heat water, 1=Off-heat water)
+- Reg 1023..1030: Inverter PID & Frequency limits (H06..H13)
+- Reg 1031: Electric Heater (H14: 0 = Off, 1 = On) [UI Auxiliary Heater Switch]
+- Reg 1032: Modbus Unit Address (H15: 1)
+- Reg 1040: Antifreeze Temp (A01: 50 -> 5.0 °C, scale 0.1)
+- Reg 1041: Antifreeze Low Pressure (A02: 20 -> 2.0 bar, scale 0.1)
+- Reg 1042: Antifreeze Temp Difference (A03: 20 -> 2.0 °C, scale 0.1)
+- Reg 1043: Shutdown Ambient Temp (A04: -200 -> -20.0 °C, signed int16, scale 0.1)
+- Reg 1044: Exhaust Temp Protect Setup (A05: 1100 -> 110.0 °C, scale 0.1)
+- Reg 1045: Spray Valve Open Temp (A06: 350 -> 35.0 °C, scale 0.1)
+- Reg 1059: Max Speed in Heating (F01: 800 rpm)
+- Reg 1060: Min Speed in Heating (F02: 300 rpm)
+- Reg 1061..1066: Suction/Exhaust Low/High Pressure thresholds for Fan (F03..F08)
+- Reg 1067: Manual Wind Speed (F09: 0 rpm)
+- Reg 1068: Mute Timer / Scheduled Quiet Mode (F10: 0 = Off/No, 1 = On/Yes) [UI Mute Control]
+- Reg 1069: Mute Timer Start Hour (F11: 0 .. 23 h, default 22) [UI Mute Control]
+- Reg 1070: Mute Timer End Hour (F12: 0 .. 23 h, default 1) [UI Mute Control]
+- Reg 1071: Mute Mode Fan Speed (F13: 450 rpm)
+- Reg 1072: DC/EC Fan Rated Speed (F14: 600 rpm)
+- Reg 1073: Fan Motor Type (F15: 1)
+- Reg 1074: Fast Mute / Instant Silent Mode (0 = Off, 1 = On) [UI Mute Control]
 
 --------------------------------------------------------------------------------
-5.5 Settings Data Block 2 (Reg 1181..1270) - Triggered by Flag 0x0008
+5.6 Settings Data Block 2 (Reg 1091..1180) - Triggered by Flag 0x0004
 --------------------------------------------------------------------------------
-Queried by Master via FC 03: Start Address = 1181 (0x049D), Quantity = 90 registers.
-(Or written via FC 16: [01, 16, 04, 157, 00, 90, 180, ...])
-Returned by LCD: 180 bytes containing operational and curve configuration parameters:
+Queried / Written via FC 03 or FC 16: Start Address = 1091 (0x0443), Quantity = 90 registers.
+Contains Defrost Settings (D), Electronic Expansion Valve (E), Disinfection (G), and Pump (P):
+- Reg 1100: Start address confirmation = 1091 (0x0443)
+- Reg 1101: Exit Defrosting Setpoint (D01: 15.0 °C)
+- Reg 1102: Exit Defrosting Pressure (D02: 25.0 bar)
+- Reg 1103..1111: Defrost curves, cycle intervals, and sliding points (D03..D11)
+- Reg 1127..1146: Electronic Expansion Valve steps, opening, and superheat (E01..E20)
+- Reg 1160..1163: High Temp Disinfection / Legionella target & work cycle (G01..G04)
+- Reg 1167..1171: Water Circulation Pump operating mode, intervals, run duration (P01..P05)
+
+--------------------------------------------------------------------------------
+5.7 Settings Data Block 3 (Reg 1181..1270) - Triggered by Flag 0x0008
+--------------------------------------------------------------------------------
+Queried / Written via FC 03 or FC 16: Start Address = 1181 (0x049D), Quantity = 90 registers.
+Contains Temperature Setpoints & Heating Curves (R), and System Daily Timer Schedules:
 - Reg 1190: Start address confirmation = 1181 (0x049D)
-- Reg 1191: Operational limit / temp setpoint = 500 (50.0 °C)
-- Reg 1192: Secondary temp setpoint = 220 (22.0 °C)
-- Reg 1193: Minimum threshold = 200 (20.0 °C)
-- Reg 1194..1195: Hysteresis / deadbands (e.g. 30 -> 3.0 °C)
-- Reg 1196: Target threshold = 400 (40.0 °C)
-- Reg 1197: Maximum cutoff limit = 650 (65.0 °C)
-- Reg 1198..1201: Intermediate curve thresholds (200, 500, 120, 200)
-- Reg 1206: Low ambient compensation = -50 (-5.0 °C)
-- Reg 1208: Extreme ambient compensation = -150 (-15.0 °C)
-- Reg 1209..1212: Water supply curve slope limits (450, 550, 550, 450)
-- Reg 1255..1258: System operational mode flags and timer definitions
+- Reg 1191: Hot Water Setpoint (R01 / DHW Boiler Target Temp: 50.5 °C, scale 0.1, step 0.5 °C) [UI Main Control]
+- Reg 1192: Heating Setpoint (R02: 22.0 °C, scale 0.1, range 20..50 °C) [UI Main Control]
+- Reg 1193: Cooling Setpoint (R03: 20.0 °C, scale 0.1, range 12..20 °C) [UI Main Control]
+- Reg 1194..1195: Power-on Return & Standby Temperature Hysteresis (R04..R05: 3.0 °C)
+- Reg 1196..1201: Min/Max Setpoint Limits for Hot Water, Heating, and Cooling (R06..R11)
+- Reg 1202: Electric Heating Mode (R12: enum 0=Not used, 1=Waterline, 2=Water tank)
+- Reg 1203..1206: Electric Heater Start Temperature Diffs and Delays (R13..R16)
+- Reg 1207..1212: Weather Compensation Heating Curve slope & limit parameters (R17..R22)
+- Reg 1255: Timer 1 (ON) Enable (T01: enum 0=Disabled/Off, 1=Enabled/On) [UI Timer 1 Control]
+- Reg 1256: Timer 1 (ON) Hour (T02: 0 .. 23 h, default 16) [UI Timer 1 Control]
+- Reg 1257: Timer 2 (OFF) Enable (T03: enum 0=Disabled/Off, 1=Enabled/On) [UI Timer 2 Control]
+- Reg 1258: Timer 2 (OFF) Hour (T04: 0 .. 23 h, default 20) [UI Timer 2 Control]
+- Reg 1259: Timer 1 (ON) Minute (T05: 0 .. 59 min, default 0) [UI Timer 1 Control]
+- Reg 1260: Timer 2 (OFF) Minute (T06: 0 .. 59 min, default 0) [UI Timer 2 Control]
+- Reg 1261: Mute Timer Start Minute (0 .. 59 min, pairs with Reg 1069 Start Hour) [UI Mute Control]
+- Reg 1262: Mute Timer End Minute (0 .. 59 min, pairs with Reg 1070 End Hour) [UI Mute Control]
+
+--------------------------------------------------------------------------------
+5.8 Main Configuration Registers for User Interface (UI Controls)
+--------------------------------------------------------------------------------
+The following table aggregates the primary configuration registers used for user
+interface control (Home Assistant Lovelace dashboard, web UI, touch screen).
+These registers manage system power, operation mode, target setpoints, quiet modes,
+and daily automatic timer schedules.
+
+Modbus Reg | Hex Addr | Block (Flag)   | UI Parameter Name         | Allowed Values / Enums / Range                           | Scale | Step   | Unit | Recommended UI Component | HA Entity / Topic Key
+-----------+----------+----------------+---------------------------+----------------------------------------------------------+-------+--------+------+--------------------------+------------------------------
+1011       | 0x03EB   | Block 1 (0x02) | State (Power ON/OFF)      | 0 = Off, 1 = On                                          | 1     | 1      | -    | Toggle Switch            | switch.hp_power_state
+1012       | 0x03EC   | Block 1 (0x02) | Mode (Operating Mode)     | 0 = Hot Water, 1 = Heating, 2 = Cooling,                 | 1     | 1      | -    | Dropdown / Select        | select.hp_operating_mode
+           |          |                |                           | 3 = Hot Water + Heating, 4 = Hot Water + Cooling         |       |        |      |                          |
+1031       | 0x03FF   | Block 1 (0x02) | Electric Heater (H14)     | 0 = Off, 1 = On                                          | 1     | 1      | -    | Toggle Switch            | switch.hp_electric_heater
+1074       | 0x0432   | Block 1 (0x02) | Fast Mute (Quiet Mode)    | 0 = Off, 1 = On                                          | 1     | 1      | -    | Toggle Switch            | switch.hp_fast_mute
+1068       | 0x042C   | Block 1 (0x02) | Mute Timer (F10)          | 0 = Off (No), 1 = On (Yes)                               | 1     | 1      | -    | Toggle Switch            | switch.hp_mute_timer_enable
+1069       | 0x042D   | Block 1 (0x02) | Mute Timer Start Hour(F11)| 0 .. 23                                                  | 1     | 1      | h    | Number Box / Time (HH)   | number.hp_mute_start_hour
+1261       | 0x04ED   | Block 3 (0x08) | Mute Timer Start Min      | 0 .. 59                                                  | 1     | 1      | min  | Number Box / Time (MM)   | number.hp_mute_start_minute
+1070       | 0x042E   | Block 1 (0x02) | Mute Timer End Hour (F12) | 0 .. 23                                                  | 1     | 1      | h    | Number Box / Time (HH)   | number.hp_mute_end_hour
+1262       | 0x04EE   | Block 3 (0x08) | Mute Timer End Min        | 0 .. 59                                                  | 1     | 1      | min  | Number Box / Time (MM)   | number.hp_mute_end_minute
+1191       | 0x04A7   | Block 3 (0x08) | Hot Water Setpoint (R01)  | R06 .. R07 (Def: 40.0 .. 65.0, factory def: 55.0)        | 0.1   | 0.5    | °C   | Number Box / Thermostat  | number.hp_boiler_target_temp
+1192       | 0x04A8   | Block 3 (0x08) | Heating Setpoint (R02)    | R08 .. R09 (Def: 20.0 .. 50.0, factory def: 40.0)        | 0.1   | 0.5    | °C   | Number Box / Thermostat  | number.hp_heating_target_temp
+1193       | 0x04A9   | Block 3 (0x08) | Cooling Setpoint (R03)    | R10 .. R11 (Def: 12.0 .. 20.0, factory def: 12.0)        | 0.1   | 0.5    | °C   | Number Box / Thermostat  | number.hp_cooling_target_temp
+1255       | 0x04E7   | Block 3 (0x08) | Timer 1 (ON) Enable (T01) | 0 = Disabled, 1 = Enabled                                | 1     | 1      | -    | Toggle Switch            | switch.hp_timer_1_enable
+1256       | 0x04E8   | Block 3 (0x08) | Timer 1 (ON) Hour (T02)   | 0 .. 23                                                  | 1     | 1      | h    | Number Box / Time (HH)   | number.hp_timer_1_hour
+1259       | 0x04EB   | Block 3 (0x08) | Timer 1 (ON) Minute (T05) | 0 .. 59                                                  | 1     | 1      | min  | Number Box / Time (MM)   | number.hp_timer_1_minute
+1257       | 0x04E9   | Block 3 (0x08) | Timer 2 (OFF) Enable (T03)| 0 = Disabled, 1 = Enabled                                | 1     | 1      | -    | Toggle Switch            | switch.hp_timer_2_enable
+1258       | 0x04EA   | Block 3 (0x08) | Timer 2 (OFF) Hour (T04)  | 0 .. 23                                                  | 1     | 1      | h    | Number Box / Time (HH)   | number.hp_timer_2_hour
+1260       | 0x04EC   | Block 3 (0x08) | Timer 2 (OFF) Minute (T06)| 0 .. 59                                                  | 1     | 1      | min  | Number Box / Time (MM)   | number.hp_timer_2_minute
+1167       | 0x048F   | Block 2 (0x04) | Pump Running Mode (P01)   | 0 = Ordinary, 1 = Special, 2 = Interval                  | 1     | 1      | -    | Dropdown / Select        | select.hp_pump_running_mode
+1168       | 0x0490   | Block 2 (0x04) | Pump Running Interval(P02)| 0 .. 120                                                 | 1     | 1      | min  | Number Box / Slider      | number.hp_pump_running_interval
+1169       | 0x0491   | Block 2 (0x04) | Pump Running Duration(P03)| 0 .. 30                                                  | 1     | 1      | min  | Number Box / Slider      | number.hp_pump_running_duration
+
+Integration Guidelines for User Interfaces:
+1. Scheduled Mute Timer Split Architecture:
+   - Start Time (HH:MM) is split across two Modbus data blocks:
+     * Hour: Register 1069 (Settings Block 1, Flag 0x0002)
+     * Minute: Register 1261 (Settings Block 3, Flag 0x0008)
+   - End Time (HH:MM) is split across two Modbus data blocks:
+     * Hour: Register 1070 (Settings Block 1, Flag 0x0002)
+     * Minute: Register 1262 (Settings Block 3, Flag 0x0008)
+   - UIs can present unified HH:MM time pickers by dispatching the corresponding
+     register writes to their respective Modbus blocks.
+
+2. Daily Timer 1 and Timer 2 Schedules:
+   - Timer 1 (Auto-ON) and Timer 2 (Auto-OFF) reside entirely in Settings Block 3 (Flag 0x0008).
+   - Changing either the enable state or time values only triggers a single Flag 8 sync handshake.
+
+3. System State & Mode Switching:
+   - Both State (1011) and Mode (1012) reside in Settings Block 1 (Flag 0x0002).
+   - When turning the heat pump on/off or switching modes from Home Assistant, send Flag 2 to Master.
+
+4. Water Circulation Pump Management:
+   - Reside in Settings Block 2 (Flag 0x0004) - Reg 1167 (Mode), Reg 1168 (Interval time), Reg 1169 (Run duration).
+
+
+
+
+================================================================================
+5.9 COMPREHENSIVE FAULT & ALARM CODE MATRIX (MANUAL SPECIFICATION)
+================================================================================
+When a safety protection trips or a component enters a fault state, the heat pump
+main controller registers an alarm. The alarm is displayed on the physical LCD display,
+logged in failure history ("Failure Logging" screen, access code 066 / 022),
+broadcast via telemetry (Register 2085 and Register 2034 bitfield), and triggers
+the general alarm output relay RO11 (Register 2019 Bit 10).
+
+--------------------------------------------------------------------------------
+5.9.1 Temperature & Pressure Sensor Fault Codes (P-Codes & PP-Codes)
+--------------------------------------------------------------------------------
+Code  | Subsystem / Function               | Fault Description                | Cause / Condition                  | Recovery / Remedy
+------+------------------------------------+----------------------------------+------------------------------------+----------------------------------
+P01   | Water Circuit (Inlet)              | Inlet Water Temp Sensor Fault    | Sensor damaged, open or short circ | Check / replace sensor T01 (NTC 5k)
+P02   | Water Circuit (Outlet)             | Outlet Water Temp Sensor Fault   | Sensor damaged, open or short circ | Check / replace sensor T02 (NTC 5k)
+P03   | Water Circuit (DHW Tank)           | Water Tank / DHW Temp Sensor     | Sensor damaged, open or short circ | Check / replace sensor T04 (NTC 10k)
+P04   | Environment (Outdoor)              | Ambient Outdoor Temp Sensor      | Sensor damaged, open or short circ | Check / replace sensor T07 (NTC 5k)
+P17   | Refrigerant (Suction)              | Suction Gas Temp Sensor Fault    | Sensor damaged, open or short circ | Check / replace sensor T05 (NTC 5k)
+P153  | Refrigerant (Evaporator)           | Evaporator Coil Temp Sensor      | Sensor damaged, open or short circ | Check / replace sensor T06 (NTC 5k)
+P181  | Refrigerant (Discharge)            | Discharge Gas Temp Sensor Fault  | Sensor damaged, open or short circ | Check / replace sensor T03 (NTC 50k)
+P182  | Refrigerant (Superheat)            | Discharge Superheat Sensor Fault | Sensor damaged, open or short circ | Check / replace sensor T03
+PP1   | Pressure (High Side)               | Discharge High Pressure Sensor   | Pressure transducer faulty/broken  | Check / replace transducer T09 (0-50 bar)
+PP2   | Pressure (Low Side)                | Suction Low Pressure Sensor      | Pressure transducer faulty/broken  | Check / replace transducer T08 (0-20 bar)
+
+--------------------------------------------------------------------------------
+5.9.2 System Safety & Operational Protection Codes (E-Codes)
+--------------------------------------------------------------------------------
+Code  | Subsystem / Function               | Fault Description                | Cause / Condition                  | Recovery / Remedy
+------+------------------------------------+----------------------------------+------------------------------------+----------------------------------
+TP    | Thermal Protection                 | Low Ambient Temp Protection      | Ambient temp T07 < A04 (-20 °C)    | Auto resumes when T07 > A04 + 2 °C
+E04   | Electrical Circuit                 | Electrical Circuit Overheat      | Compressor overload / circuit hot  | Check compressor electrical load
+E06   | Water System                       | Excess Water Temp Difference     | Large temp diff between T01 & T02  | Check water flow, pump, bypass
+E08   | Communication                      | Main Board <-> LCD Display Comm  | Communication cable/wiring failure | Check RS-485 bus / connection
+E11   | Safety Switch (High Pressure)      | High Pressure Protection Switch  | High pressure switch S01 tripped   | Check refrigerant circuit & S01
+E12   | Safety Switch (Low Pressure)       | Low Pressure Protection Switch   | Low pressure switch S02 tripped    | Check refrigerant circuit & S02
+E19   | Frost Protection                   | Primary Antifreeze Protection    | Ambient temp low, T02 < A01 (5 °C) | Pump runs, auto reset: T02 > A01+A03
+E29   | Frost Protection                   | Secondary Antifreeze Protection  | Ambient temp critically low        | Secondary freeze guard staging
+E032  | Water Flow Safety                  | Water Flow Switch Protection     | Flow switch S03 open (no water)    | Check water loop, pump, air locks
+E051  | Compressor Protection              | Compressor Current Overload      | Excessive compressor run current   | Check compressor and power feed
+E171  | Water System Safety                | Antifreeze Water Flow Protection | Insufficient flow during heating   | Check piping, valves, water flow
+E081  | Fan Controller Comm                | Fan Motor Speed Controller Comm  | Comm loss between PCB and fan drv  | Check fan inverter RS-485 cable
+F031  | Fan Drive (Motor 1)                | DC Fan Motor 1 Fault             | Rotor locked or wiring disconnected| Check / replace Fan Motor 1
+F032  | Fan Drive (Motor 2)                | DC Fan Motor 2 Fault             | Rotor locked or wiring disconnected| Check / replace Fan Motor 2
+
+--------------------------------------------------------------------------------
+5.9.3 Inverter Driver & Power Supply Fault Codes (F-Codes)
+--------------------------------------------------------------------------------
+Code  | Subsystem / Function               | Fault Description                | Cause / Condition                  | Recovery / Remedy
+------+------------------------------------+----------------------------------+------------------------------------+----------------------------------
+F01   | Compressor Inverter                | Phase Loss / Drive Hardware Fault| Compressor step/drive hardware bad | Check measuring voltage & drive board
+F03   | Power Electronics                  | Power Factor Correction Circuit  | PFC circuit trip / fuse blown      | Check PFC fuse and circuit
+F05   | Power Supply (DC Bus)              | DC Bus Overvoltage               | DC bus voltage > overvoltage limit | Check input AC voltage and DC bus
+F06   | Power Supply (DC Bus)              | DC Bus Undervoltage              | DC bus voltage < undervoltage limit| Check input AC voltage and DC bus
+F07   | Power Supply (AC Input)            | AC Input Undervoltage / Low Curr | Input voltage too low -> low curr  | Check AC input voltage supply
+F08   | Power Supply (AC Input)            | AC Input Overcurrent / Overvolt  | Input voltage too high -> high curr| Check AC input voltage supply
+F09   | IPM Power Module                   | IPM Overcurrent / Voltage Sample | Excessive IPM current / sample err | Check IPM current measurement
+F10   | Internal Bus                       | DSP to PFC Comm Error            | Loose connection between DSP & PFC | Check internal board connectors
+F11   | Microcontroller                    | DSP Internal Comm Error          | DSP communication failure          | Check DSP drive board
+F12   | Communication                      | Inverter Board Comm Error        | Comm failure between Inverter & PCB| Check RS-485 link to Inverter (Slave 4)
+F13   | IPM Power Module                   | IPM Module Overheat Shutdown     | Heatsink / IPM temperature too high| Check heatsink paste, airflow, fan
+F14   | Compressor Motor                   | Weak Compressor Magnetism        | Compressor magnetic flux weakened  | Check compressor motor
+F15   | Power Supply (AC Mains)            | AC Input Missing Phase           | Phase drop on AC mains supply      | Check mains power connection
+F16   | Current Sensing Circuit            | IPM Current Sampling Error       | Sampling circuit faulty            | Check IPM sampling circuit
+F17   | Thermal Sensor                     | Module / Heatsink Temp Sensor    | Heatsink temp sensor open / bad    | Check / replace heatsink sensor
+F20   | Power Electronics                  | IGBT Power Switch Overheat       | IGBT silicon temp sensor too high  | Check cooling / thermal load
+F21   | Compressor Current                 | Compressor Overload Current      | Compressor input current too high  | Check compressor mechanical load
+F22   | Total Current                      | AC Input Total Overcurrent       | Total AC input current too high    | Check unit electrical load
+F23   | Microcontroller Memory             | EEPROM Memory Error              | MCU EEPROM read/write failure      | Check MCU / memory chip
+F24   | Firmware Security                  | EEPROM Write-Protection Violation| MCU memory protection fault        | Check MCU / firmware integrity
+F25   | Low Voltage Rail                   | Low Voltage on 15V Rail          | V15V rail outside 13.5V - 16.5V    | Check 15V auxiliary power supply
+F26   | Power Electronics                  | IGBT Power Switch Overheat       | IGBT sensor temperature excessive  | Check cooling / thermal load
+
+
+================================================================================
+5.10 CONTROLLER HARDWARE, SENSOR TYPES & TERMINAL WIRING (PC8002 PCB)
+================================================================================
+Main PCB Model      : PC8002 (Board assembly: 35005-310738 + 35005-310739)
+Microcontroller     : Dedicated DSP + MCU architecture
+Bus Noise Immunity  : Group pulse resistance up to 4000V
+Bus Transmission Dis: Up to 100 - 200m between outdoor unit PCB and LCD wall controller
+Temperature Control : Superheat regulation accuracy 0.1 °C
+
+Terminal Connections & Ratings:
+- Digital Relays (5A / 250VAC resistive):
+  * RO01 : Compressor Inverter Driver Run Command (O01 / Reg 2019 Bit 0)
+  * RO02 : Primary Circulation Water Pump (O02 / Reg 2019 Bit 1)
+  * RO03 : 4-way Reversing Valve (O03 / Reg 2019 Bit 2)
+  * RO04 : Fan Motor Run Relay (O04 / Reg 2019 Bit 3)
+  * RO06 : Basepan Antifreeze Heating Cable (O06 / Reg 2019 Bit 5)
+  * RO07 : Crankcase Compressor Heating Cable (O07 / Reg 2019 Bit 6)
+  * RO08 : Vapor Injection / Spray Valve (O08 / Reg 2019 Bit 7)
+  * RO09 : Auxiliary Electric Backup Heater / 3kW Boiler (O09 / Reg 2019 Bit 8)
+  * RO11 : General Fault Alarm Signaling (O11 / Reg 2019 Bit 10)
+  * RO12 : DHW Water Circulation Pump (O12 / Reg 2019 Bit 11)
+  * RO13 : 3-way Heating / DHW Diverting Valve (O13 / Reg 2019 Bit 12)
+
+- Analog Inputs & Sensor Specifications:
+  * T01 (Inlet Water Temp)     : Terminal AI/DI 01 -> NTC 5kΩ @ 25°C (Reg 2045, Scale 0.1 °C)
+  * T02 (Outlet Water Temp)    : Terminal AI/DI 02 -> NTC 5kΩ @ 25°C (Reg 2046, Scale 0.1 °C)
+  * T03 (Discharge Gas Temp)   : Terminal AI/DI 03 -> NTC 50kΩ @ 25°C (Reg 2047, Scale 0.1 °C)
+  * T04 (Water Tank / DHW)     : Terminal AI/DI 08 -> NTC 10kΩ @ 25°C (Reg 2048, Scale 0.1 °C)
+  * T05 (Suction Gas Temp)     : Terminal AI/DI 05 -> NTC 5kΩ @ 25°C (Reg 2049, Scale 0.1 °C)
+  * T06 (Evaporator Coil Temp) : Terminal AI/DI 06 -> NTC 5kΩ @ 25°C (Reg 2050, Scale 0.1 °C)
+  * T07 (Ambient Outdoor Temp) : Terminal AI/DI 07 -> NTC 5kΩ @ 25°C (Reg 2051, Scale 0.1 °C)
+  * T08 (Suction Pressure)     : Terminal AI/DI 21 -> 5kΩ / ratiometric 0-20 bar (Reg 2052, Scale 0.1 bar)
+  * T09 (Discharge Pressure)   : Terminal AI/DI 22 -> 5kΩ / ratiometric 0-50 bar (Reg 2053, Scale 0.1 bar)
+
+- Digital Inputs (Dry Contact):
+  * S01 (High Pressure Switch) : Terminal AI/DI 23 (Reg 2034 Bit 0)
+  * S02 (Low Pressure Switch)  : Terminal AI/DI 24 (Reg 2034 Bit 1)
+  * S03 (Water Flow Switch)    : Terminal AI/DI 25 (Reg 2034 Bit 2)
+  * S04 (Emergency / Remote)   : Terminal AI/DI 26 (Reg 2034 Bit 3)
+  * S05 (Mode Switch H/C)      : Terminal AI/DI 27 (Reg 2034 Bit 4)
+  * S07 (Heater Overload Guard): Terminal AI/DI 29 (Reg 2034 Bit 6)
+
+- Stepper Actuator:
+  * EEV (Electronic Expansion Valve): 5-wire stepper, 0 to 500 steps (O14 / Reg 2020)
 
 
 ================================================================================
 6. STATE MACHINE FOR EMULATING THE LCD CONTROLLER
 ================================================================================
-If building an ESP32 / Arduino / Raspberry Pi module to replace or intercept the
-LCD display, implement this state machine:
 
+--------------------------------------------------------------------------------
+6.1 Operational States & Transitions
+--------------------------------------------------------------------------------
 +-----------------------------------------------------------------------------+
 | STATE 0: IDLE_LISTENING                                                     |
 | - Listen on RS485 for request matching [01, 03, 0B, B9, 00, 15, ...]        |
 | - If received:                                                              |
-|   1. Build 42-byte response.                                                |
-|   2. Put current local time in offsets 35-44.                               |
-|   3. If Block 1 (Reg 1001) setting change queued:                           |
+|   1. Build 42-byte response with current RTC in offsets 35-44.              |
+|   2. If Flag 128 (0x8000) queued:                                           |
+|        Set offsets 23-24 (Reg 3011) = 0x8000 (byte 23 = 128, byte 24 = 0)   |
+|        Transition -> STATE 1: AWAITING_SETTINGS_SYNC                         |
+|      Else if Block 1 (Reg 1001) change queued:                              |
 |        Set offsets 23-24 (Reg 3011) = 0x0002                                |
 |        Transition -> STATE 1: AWAITING_SETTINGS_SYNC                         |
-|      Else if Block 2 (Reg 1181) setting change queued:                      |
+|      Else if Block 2 (Reg 1091) change queued:                              |
+|        Set offsets 23-24 (Reg 3011) = 0x0004                                |
+|        Transition -> STATE 1: AWAITING_SETTINGS_SYNC                         |
+|      Else if Block 3 (Reg 1181) change queued:                              |
 |        Set offsets 23-24 (Reg 3011) = 0x0008                                |
 |        Transition -> STATE 1: AWAITING_SETTINGS_SYNC                         |
 |      Else:                                                                  |
 |        Set offsets 23-24 (Reg 3011) = 0x0000                                |
-|   4. Calculate CRC16 and transmit response.                                 |
+|   3. Calculate CRC16 and transmit response.                                 |
 +--------------------------------------+--------------------------------------+
                                        |
-                   Trigger Flag 0x0002 | or 0x0008 sent to Master
+                   Trigger Flag 0x8000 | 0x0002 / 0x0004 / 0x0008 sent
                                        v
 +-----------------------------------------------------------------------------+
 | STATE 1: AWAITING_SETTINGS_SYNC                                             |
-| - Master recognizes flag and requests/sends parameters:                     |
-|   * For Flag 0x0002: Reads Reg 1001 [01, 03, 03, E9, 00, 5A, ...]           |
-|                      or Writes Reg 1001 [01, 10, 03, E9, 00, 5A, B4, ...]   |
-|   * For Flag 0x0008: Reads Reg 1181 [01, 03, 04, 9D, 00, 5A, ...]           |
-|                      or Writes Reg 1181 [01, 10, 04, 9D, 00, 5A, B4, ...]   |
-| - If read request received:                                                 |
-|   1. Construct 180-byte buffer with current/modified parameter registers.   |
-|   2. Append Modbus FC 03 response header [01, 03, B4, ...] + CRC16.         |
-|   3. Transmit packet to Master.                                             |
-|   4. Transition -> STATE 2: AWAITING_WRITE_ACK                              |
-| - Timeout: 3 seconds -> Fall back to STATE 0.                               |
+| - For Flag 0x8000: Master writes Block 1 (1001), Block 2 (1091), and        |
+|   Block 3 (1181) sequentially via FC 16. Store all registers into memory.   |
+|   Echo FC 16 confirmation after each block.                                 |
+| - For single block change (Flag 2, 4, 8): Master queries via FC 03 Read      |
+|   (LCD transmits 180 bytes) OR Master writes via FC 16.                     |
+| - Transition -> STATE 2: AWAITING_WRITE_ACK                                 |
 +--------------------------------------+--------------------------------------+
                                        |
-                   180 bytes sent      |
+                   All blocks received |
                                        v
 +-----------------------------------------------------------------------------+
 | STATE 2: AWAITING_WRITE_ACK                                                 |
-| - Master stores parameters and clears register 3011 by sending:             |
+| - Master sends FC 16 to clear register 3011:                                |
 |   [01, 16, 0B, C3, 00, 01, 02, 00, 00, 0D, A3]                             |
 | - When received:                                                            |
-|   1. Clear local pending change queue.                                      |
-|   2. Send confirmation echo: [01, 16, 0B, C3, 00, 01, F3, D1].              |
-|   3. Transition -> STATE 0: IDLE_LISTENING.                                 |
+|   1. If completing Flag 128 sync: mark configuration INITIALIZED in memory. |
+|   2. Clear local pending change queue (Reg 3011 -> 0x0000).                 |
+|   3. Send confirmation echo: [01, 16, 0B, C3, 00, 01, F3, D1].              |
+|   4. Transition -> STATE 0: IDLE_LISTENING.                                 |
 +-----------------------------------------------------------------------------+
+
+--------------------------------------------------------------------------------
+6.2 Startup Auto-Sync (Flag 128) & Write Protection Guard
+--------------------------------------------------------------------------------
+To prevent overwriting heat pump settings with blank, zeroed, or unverified defaults:
+
+1. Automatic Startup Read-out (Flag 128):
+   - When Node-RED starts up, an auto-inject fires within 0.5s.
+   - It sets Flag 128 (0x8000) and marks lcd_config_initialized = false.
+   - On the next poll, Flag 128 is sent to the Master.
+   - The Master transfers all 270 real parameter registers into Node-RED memory.
+   - Once the final ACK is received, lcd_config_initialized = true is set.
+
+2. Write Protection Guard:
+   - Any attempt to modify configuration registers (Flag 2, 4, or 8) is
+     strictly BLOCKED until lcd_config_initialized === true.
+   - Blocked requests log a warning and return error object:
+     { error: "CONFIGURATION_NOT_INITIALIZED", message: "..." }.
+   - Once initialized, parameter changes use the live values read during Flag 128
+     as the base, modifying only the explicitly requested registers.
 
 
 ================================================================================
 7. PASSIVE SNIFFING & HOME ASSISTANT / MQTT INTEGRATION NOTES
 ================================================================================
-If your goal is only to monitor and graph all Heat Pump metrics in Home Assistant:
-1. You DO NOT need to transmit on the RS-485 bus.
-2. Passive sniffing is 100% electrically safe and avoids colliding with the Master.
-3. Simply tap the RS-485 A and B lines with an isolated USB-RS485 adapter.
-4. Listen exclusively for frames starting with:
+--------------------------------------------------------------------------------
+7.1 Passive Sniffing & Telemetry Metrics (Broadcast Part A & B)
+--------------------------------------------------------------------------------
+If your goal is to monitor and graph live Heat Pump operational metrics in Home Assistant:
+1. Passive sniffing is 100% electrically safe and avoids colliding with the Master.
+2. Tap the RS-485 A and B lines with an isolated USB-RS485 adapter.
+3. Listen for frames starting with:
    [00, 16, 07, 209] -> [0x00, 0x10, 0x07, 0xD1] (Broadcast Part A).
-5. Extract registers using the offsets defined in Section 5.1 & 5.2.
-6. Publish to Home Assistant via MQTT Discovery (Home Assistant MQTT format:
+4. Extract registers using the offsets defined in Section 5.1 & 5.2.
+5. Publish to Home Assistant via MQTT Discovery:
    - Sensors: Inlet/Outlet/Discharge/Boiler/Suction/Evaporator/Ambient temps
    - Binary Sensors: Compressor, Water Pump, 4-Way Valve, Fan, Heaters
-   - Measurements: Pressures, Frequencies, AC Voltage, AC Current, Fan RPM).
+   - Measurements: Pressures, Frequencies, AC Voltage, AC Current, Fan RPM
+   - State topic: `nodered/heatpump/nodered_heatpump_001/state` (unretained, periodic 10s).
+
+--------------------------------------------------------------------------------
+7.2 Bidirectional Home Assistant MQTT Integration for Configuration Registers
+--------------------------------------------------------------------------------
+For configuration registers (such as target setpoints, limits, and heating curves),
+Node-RED provides bidirectional synchronization using Home Assistant MQTT Discovery:
+
+1. Device & Topic Architecture:
+   - Device Identifier: `nodered_heatpump_001` (Heat Pump)
+   - Configuration State Topic: `nodered/heatpump/nodered_heatpump_001/config_state`
+     * Retained: TRUE (persists across Home Assistant restarts and Node-RED boots).
+     * Payload: JSON object containing all known configuration keys and register IDs:
+       e.g. `{"boiler_target_temp": 50.0, "1191": 50.0}`
+   - Configuration Set Topic: `nodered/heatpump/nodered_heatpump_001/config/<reg>/set`
+     * Inbound MQTT topic subscribed by Node-RED.
+     * When user changes a setpoint in HA, HA publishes the float value (e.g. "52.0").
+
+2. Registered Configuration Register: Reg 1191 (Boiler Target Temp):
+   - Register: 1191 (Settings Data Block 3: 1181..1270).
+   - Scaling: Factor of 10 (`500` = `50.0 °C`).
+   - HA Entity: `number.hp_boiler_target_temp` (MQTT Number component).
+   - Unit: `°C`, Device Class: `temperature`, Icon: `mdi:water-boiler`.
+   - Range: Min 30.0 °C, Max 60.0 °C, Step: 0.5 °C, Mode: `box`.
+   - Discovery Topic: `homeassistant/number/nodered_heatpump_001_reg_1191_boiler_target_temp/config`
+
+3. Bidirectional Write Sequence:
+   a. User changes temperature in HA to 52.0 °C.
+   b. HA publishes "52.0" to `nodered/heatpump/nodered_heatpump_001/config/1191/set`.
+   c. Node-RED verifies `flow.get("lcd_config_initialized") === true` (Flag 128 safety guard).
+   d. Node-RED converts float to raw integer: `52.0 / 0.1 = 520`.
+   e. Node-RED updates `lcd_config_registers_block3[1191] = 520` and sets `lcd_event_flag = 8`.
+   f. Node-RED immediately publishes updated retained state `52.0` to `config_state`.
+   g. On the next periodic poll (within 1 sec), Slave 1 responds with Flag 8.
+   h. Master reads Block 3 (FC 03) or writes Block 3 (FC 16), synchronizing the new setpoint.
+
+4. Extensibility: Adding Future Decoded Configuration Registers:
+   To expose any new decoded register to Home Assistant, simply add a single definition
+   entry to `configRegisterMap` in the "Create HA mqtt device" node (`a671a68f7d9c1dfb`):
+   ```javascript
+   const configRegisterMap = {
+       1011: {
+           key: "power_state",
+           name: "Heat Pump Power",
+           component: "switch",
+           icon: "mdi:power",
+           scale: 1,
+           options: { 0: "OFF", 1: "ON" }
+       },
+       1012: {
+           key: "operating_mode",
+           name: "Operating Mode",
+           component: "select",
+           icon: "mdi:heat-pump",
+           scale: 1,
+           options: ["Hot Water", "Heating", "Cooling", "Hot Water + Heating", "Hot Water + Cooling"]
+       },
+       1031: {
+           key: "electric_heater",
+           name: "Auxiliary Electric Heater",
+           component: "switch",
+           icon: "mdi:radiator",
+           scale: 1,
+           options: { 0: "OFF", 1: "ON" }
+       },
+       1074: {
+           key: "fast_mute",
+           name: "Fast Mute (Quiet Mode)",
+           component: "switch",
+           icon: "mdi:volume-mute",
+           scale: 1,
+           options: { 0: "OFF", 1: "ON" }
+       },
+       1191: {
+           key: "boiler_target_temp",
+           name: "Boiler Target Temp",
+           component: "number",
+           devClass: "temperature",
+           unit: "°C",
+           icon: "mdi:water-boiler",
+           scale: 0.1,        // Raw 505 -> 50.5 °C
+           min: 30,
+           max: 60,
+           step: 0.5,
+           mode: "box"
+       },
+       1192: {
+           key: "heating_target_temp",
+           name: "Heating Setpoint",
+           component: "number",
+           devClass: "temperature",
+           unit: "°C",
+           icon: "mdi:radiator",
+           scale: 0.1,        // Raw 220 -> 22.0 °C
+           min: 20,
+           max: 50,
+           step: 0.5,
+           mode: "box"
+       },
+       1193: {
+           key: "cooling_target_temp",
+           name: "Cooling Setpoint",
+           component: "number",
+           devClass: "temperature",
+           unit: "°C",
+           icon: "mdi:snowflake",
+           scale: 0.1,        // Raw 200 -> 20.0 °C
+           min: 12,
+           max: 20,
+           step: 0.5,
+           mode: "box"
+       }
+   };
+   ```
+   No changes to any other node or wiring are required! The discovery generator, state
+   publisher, command listener, safety guard, and Modbus block mapper handle everything
+   automatically.
 
 
 ================================================================================
@@ -448,102 +850,86 @@ Example 1: Master Poll LCD Display (FC 03, Reg 3001, Qty 21)
 --------------------------------------------------------------------------------
 Dec : [1, 3, 11, 185, 0, 21, 87, 196]
 Hex : 01 03 0B B9 00 15 57 C4
-Breakdown:
-  01    : Slave ID 1
-  03    : Function Code 3 (Read Holding Registers)
-  0B B9 : Start Register 3001
-  00 15 : Quantity 21 registers (42 bytes)
+
 Example 2: LCD Reply with Event Flag 2 (Trigger Block 1 settings synchronization)
 --------------------------------------------------------------------------------
 Dec : [1, 3, 42, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,2, 0,0,0,0,0,0,0,0,0,0,0, 26,0,9,0,30,0,14,0,32, CRC_L, CRC_H]
-Hex : 01 03 2A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 02 ...
-Breakdown:
-  01    : Slave ID 1
-  03    : Function Code 3
-  2A    : 42 data bytes
-  Offset 23-24: 00 02 -> Event Flag 2 (Settings Block 1 Changed on LCD)
-  Offset 35-44: Real-time clock (Year, Month, Day, Hour, Min)
+Hex : 01 03 2A 00 00 ... 00 02 ...
 
 Example 3: Master Read Block 1 Request (FC 03, Reg 1001, Qty 90)
 --------------------------------------------------------------------------------
 Dec : [1, 3, 3, 233, 0, 90, 20, 65]
 Hex : 01 03 03 E9 00 5A 14 41
-Breakdown:
-  01    : Slave ID 1
-  03    : Function Code 3
-  03 E9 : Start Register 1001
-  00 5A : Quantity 90 registers (180 data bytes)
-  14 41 : CRC-16 (Valid: Low=0x14 (20), High=0x41 (65))
 
 Example 4: Master Write Block 1 Request (FC 16, Reg 1001, Qty 90, 180 Bytes)
 --------------------------------------------------------------------------------
 Dec : [1, 16, 3, 233, 0, 90, 180, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 3,233, 0,0, ...]
 Hex : 01 10 03 E9 00 5A B4 00 00 ... 03 E9 ...
-Breakdown:
-  01    : Slave ID 1
-  10    : Function Code 16 (Write Multiple Registers)
-  03 E9 : Start Register 1001
-  00 5A : Quantity 90 registers
-  B4    : 180 data bytes
-  Payload Offset 18: 03 E9 (Register 1010 confirmation = 1001)
 
 Example 5: Master Clear/Acknowledge Register 3011 (FC 16, Reg 3011, Qty 1, Value 0x0000)
 --------------------------------------------------------------------------------
 Dec : [1, 16, 11, 195, 0, 1, 2, 0, 0, 13, 163]
 Hex : 01 10 0B C3 00 01 02 00 00 0D A3
-Breakdown:
-  01    : Slave ID 1
-  10    : Function Code 16 (0x10 - Write Multiple Registers)
-  0B C3 : Start Register 3011
-  00 01 : Quantity 1 register
-  02    : Byte Count 2
-  00 00 : Value 0x0000
-  0D A3 : CRC-16 (Valid: Low=0x0D (13), High=0xA3 (163))
 
 Example 6: LCD Acknowledge Confirmation (FC 16 Echo)
 --------------------------------------------------------------------------------
 Dec : [1, 16, 11, 195, 0, 1, 243, 209]
 Hex : 01 10 0B C3 00 01 F3 D1
-Breakdown:
-  01    : Slave ID 1
-  10    : Function Code 16
-  0B C3 : Start Register 3011
-  00 01 : Quantity 1 register
-  F3 D1 : CRC-16 (Valid: Low=0xF3 (243), High=0xD1 (209))
 
-Example 7: LCD Reply with Event Flag 8 (Trigger Block 2 settings synchronization)
+Example 7: LCD Reply with Event Flag 8 (Trigger Block 3 settings synchronization)
 --------------------------------------------------------------------------------
 Dec : [1, 3, 42, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,8, 0,0,0,0,0,0,0,0,0,0,0, 26,0,9,0,30,0,14,0,32, 69, 233]
-Hex : 01 03 2A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 08 ...
-Breakdown:
-  01    : Slave ID 1
-  03    : Function Code 3
-  2A    : 42 data bytes
-  Offset 23-24: 00 08 -> Event Flag 8 (Settings Block 2 Changed on LCD)
-  45 E9 : CRC-16 (Valid: Low=0x45 (69), High=0xE9 (233))
+Hex : 01 03 2A 00 00 ... 00 08 ...
 
-Example 8: Master Read Block 2 Settings Request (FC 03, Reg 1181, Qty 90)
+Example 8: Master Read Block 3 Settings Request (FC 03, Reg 1181, Qty 90)
 --------------------------------------------------------------------------------
 Dec : [1, 3, 4, 157, 0, 90, 85, 47]
 Hex : 01 03 04 9D 00 5A 55 2F
-Breakdown:
-  01    : Slave ID 1
-  03    : Function Code 3
-  04 9D : Start Register 1181
-  00 5A : Quantity 90 registers (180 data bytes)
-  55 2F : CRC-16 (Valid: Low=0x55 (85), High=0x2F (47))
 
-Example 9: LCD Block 2 Settings Data Response (180 bytes)
+Example 9: LCD Block 3 Settings Data Response (180 bytes)
 --------------------------------------------------------------------------------
-Dec : [1, 3, 180, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 4,157, 1,244, 0,220, 0,200, 0,30, 0,30, 1,144, 2,138, 0,200, 1,244, 0,120, 0,200, 0,0, 0,50, 0,20, 0,45, 255,206, 0,0, 255,106, 1,194, 2,38, 2,38, 1,194, 0,0, ..., 1, 0,16, 0,1, 0,20, 0,0, ..., 125, 234]
-Breakdown:
-  01    : Slave ID 1
-  03    : Function Code 3
-  B4    : 180 data bytes
-  Offset 18: 04 9D (Register 1190 confirmation = 1181)
-  Reg 1191: 500 (50.0 °C), Reg 1192: 220 (22.0 °C), Reg 1196: 400 (40.0 °C), Reg 1197: 650 (65.0 °C)
-  Reg 1206: -50 (-5.0 °C), Reg 1208: -150 (-15.0 °C), Reg 1209: 450 (45.0 °C), Reg 1210: 550 (55.0 °C)
-  CRC-16: 125, 234 (Valid: Low=0x7D (125), High=0xEA (234)): Low=0x7D (125), High=0xEA (234))
+Dec : [1, 3, 180, 0,0, ..., 4,157, 1,244, 0,220, 0,200, ..., 125, 234]
+Hex : 01 03 B4 00 00 ... 04 9D ...
+
+Example 10: Complete 9-Frame Full System Initialization Handshake (Flag 128 / 0x8000)
+--------------------------------------------------------------------------------
+Frame 1 (15:31:15) LCD -> Master [FC 03 Poll Response, Reg 3011 = 0x8000 (128)]:
+Dec: [1, 3, 42, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 128,0, 0,0,0,0,0,0,0,0,0,0,0, 26,0,10,0,2,0,15,0,38, 119, 201]
+Hex: 01 03 2A 00 00 ... 80 00 ... 00 1A 00 0A 00 02 00 0F 00 26 77 C9
+Note: Offset 23-24 = 0x8000 (byte 23 = 128). RTC = 2026-10-02 15:38.
+
+Frame 2 (15:31:16) Master -> LCD [FC 16 Write Block 1: Reg 1001..1090, 180 bytes]:
+Dec: [1, 16, 3, 233, 0, 90, 180, <180 data bytes>, 114, 101]
+Hex: 01 10 03 E9 00 5A B4 ... 72 65
+
+Frame 3 (15:31:16) LCD -> Master [FC 16 Write Block 1 Confirmation Echo]:
+Dec: [1, 16, 3, 233, 0, 90, 145, 130]
+Hex: 01 10 03 E9 00 5A 91 82
+
+Frame 4 (15:31:16) Master -> LCD [FC 16 Write Block 2: Reg 1091..1180, 180 bytes]:
+Dec: [1, 16, 4, 67, 0, 90, 180, <180 data bytes>, 243, 235]
+Hex: 01 10 04 43 00 5A B4 ... F3 EB
+
+Frame 5 (15:31:16) LCD -> Master [FC 16 Write Block 2 Confirmation Echo]:
+Dec: [1, 16, 4, 67, 0, 90, 176, 214]
+Hex: 01 10 04 43 00 5A B0 D6
+
+Frame 6 (15:31:17) Master -> LCD [FC 16 Write Block 3: Reg 1181..1270, 180 bytes]:
+Dec: [1, 16, 4, 157, 0, 90, 180, <180 data bytes>, 39, 255]
+Hex: 01 10 04 9D 00 5A B4 ... 27 FF
+
+Frame 7 (15:31:17) LCD -> Master [FC 16 Write Block 3 Confirmation Echo]:
+Dec: [1, 16, 4, 157, 0, 90, 208, 236]
+Hex: 01 10 04 9D 00 5A D0 EC
+
+Frame 8 (15:31:17) Master -> LCD [FC 16 Clear Reg 3011 = 0x0000]:
+Dec: [1, 16, 11, 195, 0, 1, 2, 0, 0, 13, 163]
+Hex: 01 10 0B C3 00 01 02 00 00 0D A3
+
+Frame 9 (15:31:17) LCD -> Master [FC 16 Clear Confirmation Echo]:
+Dec: [1, 16, 11, 195, 0, 1, 243, 209]
+Hex: 01 10 0B C3 00 01 F3 D1
+
 
 ================================================================================
 9. PARAMETER DISCOVERY WORKFLOW (DIFF-LOGGING IN NORMAL OPERATION)
@@ -554,7 +940,7 @@ is implemented in Node-RED:
 1. Setup:
    - Heat Pump Master and real LCD panel communicate normally on RS-485.
    - Node-RED runs with LCD Emulator DISABLED (passive sniffing only, no collisions).
-   - Node "Detect & Log Config Register Changes" listens to incoming [1, 3, 180, ...].
+   - Node "Detect & Log Config Register Changes" listens to incoming frames.
 
 2. Process:
    - On the first packet received for each block, an initial baseline snapshot
@@ -570,7 +956,11 @@ is implemented in Node-RED:
      Example Output:
      2026-10-01 12:50:33 | [CONFIG CHANGED] Block 1 (Reg 1001-1090 / Flag 2) via FC 16 Write [1 change(s)]: Reg 1040: 50 -> 52 (Diff: +2 | Hex: 0x0032->0x0034)
 
-   - Conclusion deduced: Register 1040 controls DHW Target Temperature.
+   - Conclusion deduced: Register 1040 modified (+0.2 °C change).
+     [Historical Note: In early testing, Register 1040 was initially hypothesized to be DHW setpoint;
+      cross-referencing with the official manufacturer manual conclusively established that Register 1040
+      is actually Parameter A01 (Antifreeze Temp, 5.0 °C -> 5.2 °C), while DHW Target Temperature resides
+      in Register 1191 (Parameter R01 in Settings Block 3).]
 
 3. Log File Maintenance:
    - File path: `/data/log/config_changes.txt`

@@ -1,0 +1,609 @@
+================================================================================
+NORDLINE AIR-TO-WATER HEAT PUMP (N8A) - CONFIGURATION REGISTERS SPECIFICATION
+MAPPED FROM LCD CONTROLLER DISPLAY SCREENS, MODBUS RTU PACKETS & OFFICIAL MANUAL
+================================================================================
+Document Version : 1.2.0
+Date             : 2026-10-10
+Author           : Modbus Telemetry Analysis Team & Manual Synchronization
+Workspace        : c:\Dev\Lukas\Nordline-HeatPump-N8A-Modbus\heatpump_configuration_registers.txt
+Master Reference : heatpump_rs485_protocol_spec.txt
+Reference Manual : Nordline_N8A_Manual.pdf (PC8002 PCB Controller / 35005-310738 + 35005-310739)
+Reference Images : display_screens/*.JPEG (31 screens captured in succession)
+Language         : English Only (All Tables & Technical Documentation)
+
+================================================================================
+1. ARCHITECTURE & SYNCHRONIZATION OVERVIEW
+================================================================================
+The heat pump main controller (PC8002 PCB) synchronizes configuration settings with 
+the LCD display (Slave 1) using 3 contiguous 90-register data blocks (270 registers 
+total, registers 1001 to 1270):
+
+- Block 1: Registers 1001 to 1090 (0x03E9 - 0x0442) -> 90 Regs / 180 Bytes
+           Contains: System Settings (H), Protection Settings (A), Fan Settings (F)
+- Block 2: Registers 1091 to 1180 (0x0443 - 0x049C) -> 90 Regs / 180 Bytes
+           Contains: Defrost Settings (D), EEV Settings (E), Disinfection (G), Pump (P)
+- Block 3: Registers 1181 to 1270 (0x049D - 0x04F6) -> 90 Regs / 180 Bytes
+           Contains: Temperature Setpoints & Compensation (R), Timer Schedules
+
+When the LCD controller powers on or issues a full resync (Flag 128 / 0x8000 in
+Register 3011), the Master sends three consecutive Modbus FC 16 (0x10) frames
+followed by a 1-register write to Reg 3011 to acknowledge and clear the flag.
+
+Modbus Packet Structure (FC 16):
+- Byte 0    : Slave ID = 1
+- Byte 1    : Function Code = 16 (0x10)
+- Bytes 2-3 : Start Register (Big-Endian)
+- Bytes 4-5 : Register Count = 90 (0x005A)
+- Byte 6    : Data Byte Count = 180 (0xB4)
+- Bytes 7.. : 180 bytes payload (90 16-bit Big-Endian words)
+- Last 2    : Modbus CRC-16 (Low byte, High byte)
+
+Start Address Confirmation Registers:
+- Reg 1010  : Value 1001 (0x03E9) -> Start address of Block 1
+- Reg 1100  : Value 1091 (0x0443) -> Start address of Block 2
+- Reg 1190  : Value 1181 (0x049D) -> Start address of Block 3
+
+
+================================================================================
+2. PARAMETER GROUP INDEX & ACCESS LEVELS (MANUAL CODE 066 / CODE 022)
+================================================================================
+Group Prefix     | Category Description                   | Display Screen Tab          | Access Level (Manual)
+-----------------+----------------------------------------+-----------------------------+----------------------
+H (H01..H13)     | System Configuration                   | System (Screens 11, 14)     | Manufacturer         
+A (A01..A06)     | Safety & Antifreeze Protection         | Protect (Screen 15)         | Manufacturer         
+F (F01..F15)     | Fan Motor & Quiet Mode Control         | Fan (Screens 16, 17, 18)    | Manufacturer / User  
+D (D01..D11)     | Defrost Parameters                     | Defrost (Screens 19, 20)    | Manufacturer / User  
+E (E01..E20)     | Electronic Expansion Valve (EEV)       | EEV (Screens 21, 23, 24)    | Manufacturer / User  
+G (G01..G04)     | High Temp Disinfection (Legionella)    | High Temp. Disinf. (Scr 31) | Manufacturer         
+P (P01..P05)     | Water Circulation Pump Control         | Pump (Screens 29, 30)       | Manufacturer / User  
+R (R01..R22)     | Temperature Setpoints & Heating Curves | Temp (Screens 25, 26, 28)   | Manufacturer / User  
+Timer (T01..T06) | System ON / OFF Daily Timer Clock      | Timer (Screen 3)            | User                 
+
+Menu Passwords on LCD Controller:
+- Code "066" or "66" : Factory / Manufacturer Parameters Access 
+- Code "022" or "22" : User / I/O Status Inspection Access 
+
+
+================================================================================
+3. DETAILED REGISTER SPECIFICATION
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1 BLOCK 1: REGISTERS 1001 - 1090 (SYSTEM, PROTECT, FAN)
+--------------------------------------------------------------------------------
+Reg        | ID  | Parameter Name                   | Raw Val | Dec/Hex | Scale | Display Value  | Manual Range & Default              | Data Type / Options                                          
+-----------+-----+----------------------------------+---------+---------+-------+----------------+-------------------------------------+--------------------------------------------------------------
+1001       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1002       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1003       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1004       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1005       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1006       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1007       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1008       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1009       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1010       | -   | Block 1 Address Confirmation     | 1001    | 0x03E9  | 1     | 1001           | 1001                                | uint16 (Constant)                                            
+1011       | -   | System Power State (ON/OFF)      | 0       | 0x0000  | 1     | Off            | 0 .. 1                              | enum: 0=Off, 1=On                                            
+1012       | -   | Operating Mode                   | 0       | 0x0000  | 1     | Hot Water      | 0 .. 4                              | enum: 0=Hot Water, 1=Heating, 2=Cooling, 3=HW+Heat, 4=HW+Cool
+1013       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1014       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1015       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1016       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1017       | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16                                                       
+1018       | H01 | Auto start (Power Outage Memory) | 1       | 0x0001  | 1     | Yes            | 0 .. 1 (Default: 1 / Yes)           | enum: 0=No (Off after outage), 1=Yes (Remember power state)  
+1019       | H02 | Master/Slave Unit                | 0       | 0x0000  | 1     | Master         | 0 .. 1 (Default: 0 / Master)        | enum: 0=Master, 1=Slave                                      
+1020       | H03 | Temperature Unit                 | 0       | 0x0000  | 1     | °C             | 0 .. 1 (Default: 0 / °C)            | enum: 0=°C, 1=°F                                             
+1021       | H04 | 4-way Valve Polarity             | 0       | 0x0000  | 1     | On-heating     | 0 .. 1 (Default: 0 / On-heating)    | enum: 0=On-heating, 1=Off-heating                            
+1022       | H05 | 3-way Valve Polarity             | 1       | 0x0001  | 1     | Off-heat water | 0 .. 1 (Default: 0 / On-heat water) | enum: 0=On-heat water, 1=Off-heat water                      
+1023       | H06 | Frequency Control P Value        | 5       | 0x0005  | 1     | 5              | 1 .. 100 (Default: 5)               | uint16 (PID P)                                               
+1024       | H07 | Frequency Control I Value        | 1       | 0x0001  | 1     | 1              | 1 .. 100 (Default: 1)               | uint16 (PID I)                                               
+1025       | H08 | Frequency Control D Value        | 5       | 0x0005  | 1     | 5              | 0 .. 100 (Default: 5)               | uint16 (PID D)                                               
+1026       | H09 | Min Compressor Frequency         | 30      | 0x001E  | 1     | 30 Hz          | 20 .. 60 Hz (Default: 30)           | uint16 (Hz)                                                  
+1027       | H10 | Max Compressor Frequency         | 80      | 0x0050  | 1     | 80 Hz          | 30 .. 120 Hz (Default: 90)          | uint16 (Hz)                                                  
+1028       | H11 | Model Selection                  | 17      | 0x0011  | 1     | 17             | 0 .. 50 (Default: 17)               | uint16 (Model ID PC8002)                                     
+1029       | H12 | Manual Drive Frequency           | 0       | 0x0000  | 1     | 0 Hz           | 0 .. 90 Hz (Default: 0)             | uint16 (Hz, 0=Auto)                                          
+1030       | H13 | PFC Function Enable              | 1       | 0x0001  | 1     | Yes            | 0 .. 1 (Default: 1 / Yes)           | enum: 0=No, 1=Yes                                            
+1031       | H14 | Auxiliary Electric Heater        | 0       | 0x0000  | 1     | Off            | 0 .. 1 (Default: 0 / Off)           | enum: 0=Off, 1=On (Menu parameter)                           
+1032       | H15 | Unit Address (Modbus Slave ID)   | 1       | 0x0001  | 1     | 1              | 1 .. 247 (Default: 1)               | uint16 (Modbus Address)                                      
+1033..1039 | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16 (Reg 1033 to 1039)                                    
+1040       | A01 | Antifreeze Temp                  | 50      | 0x0032  | 0.1   | 5.0 °C         | -10 .. 10 °C (Default: 5.0)         | int16 (/10 °C)                                               
+1041       | A02 | Antifreeze Low Pressure          | 20      | 0x0014  | 0.1   | 2.0 bar        | 0 .. 10 bar (Default: 2.0)          | int16 (/10 bar)                                              
+1042       | A03 | Antifreeze Temp Difference       | 20      | 0x0014  | 0.1   | 2.0 °C         | 0 .. 10 °C (Default: 2.0)           | int16 (/10 °C)                                               
+1043       | A04 | Shutdown Ambient Temp            | -200    | 0xFF38  | 0.1   | -20.0 °C       | -30 .. 10 °C (Default: -20.0)       | int16 signed (/10 °C)                                        
+1044       | A05 | Safe Discharge Temp              | 1100    | 0x044C  | 0.1   | 110.0 °C       | 80 .. 130 °C (Default: 110.0)       | int16 (/10 °C)                                               
+1045       | A06 | Spray Valve Open Temp            | 350     | 0x015E  | 0.1   | 35.0 °C        | 10 .. 50 °C (Default: 35.0)         | int16 (/10 °C)                                               
+1046..1058 | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16 (Reg 1046 to 1058)                                    
+1059       | F01 | Max Speed in Heating             | 800     | 0x0320  | 1     | 800 rpm        | 0 .. 2000 rpm (Default: 1050)       | uint16 (rpm)                                                 
+1060       | F02 | Min Speed in Heating             | 300     | 0x012C  | 1     | 300 rpm        | 0 .. 2000 rpm (Default: 300)        | uint16 (rpm)                                                 
+1061       | F03 | Suction LP for Heating           | 30      | 0x001E  | 0.1   | 3.0 bar        | 0 .. 20 bar (Default: 3.0)          | int16 (/10 bar)                                              
+1062       | F04 | Suction HP for Heating           | 110     | 0x006E  | 0.1   | 11.0 bar       | 0 .. 20 bar (Default: 11.0)         | int16 (/10 bar)                                              
+1063       | F05 | Max Speed in Cooling             | 550     | 0x0226  | 1     | 550 rpm        | 0 .. 2000 rpm (Default: 1050)       | uint16 (rpm)                                                 
+1064       | F06 | Min Speed in Cooling             | 300     | 0x012C  | 1     | 300 rpm        | 0 .. 2000 rpm (Default: 300)        | uint16 (rpm)                                                 
+1065       | F07 | Discharge HP for Cooling         | 280     | 0x0118  | 0.1   | 28.0 bar       | 0 .. 50 bar (Default: 33.0)         | int16 (/10 bar)                                              
+1066       | F08 | Discharge LP for Cooling         | 200     | 0x00C8  | 0.1   | 20.0 bar       | 0 .. 50 bar (Default: 15.0)         | int16 (/10 bar)                                              
+1067       | F09 | Manual Fan Speed                 | 0       | 0x0000  | 1     | 0 rpm          | 0 .. 2000 rpm (Default: 0)          | uint16 (rpm, 0=Auto)                                         
+1068       | F10 | Mute Timer                       | 0       | 0x0000  | 1     | No             | 0 .. 1 (Default: 0 / No)            | enum: 0=No (Off), 1=Yes (On)                                 
+1069       | F11 | Mute Timer Start Hour            | 22      | 0x0016  | 1     | 22 h           | 0 .. 23 h (Default: 0)              | uint16 (Hour 0-23)                                           
+1070       | F12 | Mute Timer End Hour              | 1       | 0x0001  | 1     | 1 h            | 0 .. 23 h (Default: 0)              | uint16 (Hour 0-23)                                           
+1071       | F13 | Mute Mode Fan Speed              | 450     | 0x01C2  | 1     | 450 rpm        | 300 .. 1300 rpm (Default: 600)      | uint16 (rpm)                                                 
+1072       | F14 | DC/EC Fan Rated Speed            | 600     | 0x0258  | 1     | 600 rpm        | 0 .. 1300 rpm (Default: 600)        | uint16 (rpm)                                                 
+1073       | F15 | Fan Motor Type                   | 1       | 0x0001  | 1     | 1              | 0 .. 2 (Default: 1 / DC)            | enum: 0=AC, 1=DC, 2=2xDC                                     
+1074       | -   | Fast Mute                        | 0       | 0x0000  | 1     | Off            | 0 .. 1 (Active: 8 hrs)              | enum: 0=Off, 1=On (Instant Mute)                             
+1075..1090 | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16 (Reg 1075 to 1090)                                    
+
+
+--------------------------------------------------------------------------------
+3.2 BLOCK 2: REGISTERS 1091 - 1180 (DEFROST, EEV, DISINFECTION, PUMP)
+--------------------------------------------------------------------------------
+Reg        | ID  | Parameter Name               | Raw Val | Dec/Hex | Scale | Display Value | Manual Range & Default        | Data Type / Options                      
+-----------+-----+------------------------------+---------+---------+-------+---------------+-------------------------------+------------------------------------------
+1091..1099 | -   | Reserved                     | 0       | 0x0000  | 1     | 0             | -                             | uint16 (Reg 1091 to 1099)                
+1100       | -   | Block 2 Address Confirmation | 1091    | 0x0443  | 1     | 1091          | 1091                          | uint16 (Constant)                        
+1101       | D01 | Exit Defrost Temp            | 150     | 0x0096  | 0.1   | 15.0 °C       | 1 .. 40 °C (Default: 13.0)    | int16 (/10 °C)                           
+1102       | D02 | Exit Defrost Pressure        | 250     | 0x00FA  | 0.1   | 25.0 bar      | 1 .. 25 bar (Default: 25.0)   | int16 (/10 bar, 25 bar = 41 °C)          
+1103       | D03 | Defrost Cycle                | 30      | 0x001E  | 1     | 30 min        | 1 .. 90 min (Default: 45)     | uint16 (Minutes)                         
+1104       | D04 | Max Defrost Time             | 10      | 0x000A  | 1     | 10 min        | 1 .. 20 min (Default: 8)      | uint16 (Minutes)                         
+1105       | D05 | Sliding High Point LP        | 59      | 0x003B  | 0.1   | 5.9 bar       | 1 .. 20 bar (Default: 5.3)    | int16 (/10 bar, 5.3 bar = -12 °C)        
+1106       | D06 | Sliding Low Point LP         | 28      | 0x001C  | 0.1   | 2.8 bar       | 1 .. 20 bar (Default: 2.8)    | int16 (/10 bar, 2.8 bar = -28 °C)        
+1107       | D07 | Sliding High Point of AT     | 40      | 0x0028  | 0.1   | 4.0 °C        | -10 .. 10 °C (Default: 2.0)   | int16 (/10 °C)                           
+1108       | D08 | Sliding Low Point of AT      | -150    | 0xFF6A  | 0.1   | -15.0 °C      | -30 .. 10 °C (Default: -15.0) | int16 signed (/10 °C)                    
+1109       | D09 | Sliding Defrost              | 1       | 0x0001  | 1     | Yes           | 0 .. 1 (Default: 1 / Yes)     | enum: 0=No, 1=Yes                        
+1110       | D10 | Electric Heater Defrost      | 0       | 0x0000  | 1     | No            | 0 .. 1 (Default: 0 / No)      | enum: 0=No (Keep state), 1=Yes (Force ON)
+1111       | D11 | Defrost Frequency            | 70      | 0x0046  | 1     | 70 Hz         | 0 .. 90 Hz (Default: 70)      | uint16 (Hz)                              
+1112..1126 | -   | Reserved                     | 0       | 0x0000  | 1     | 0             | -                             | uint16 (Reg 1112 to 1126)                
+1127       | E01 | Adjustment Mode              | 1       | 0x0001  | 1     | Auto          | 0 .. 1 (Default: 1 / Auto)    | enum: 0=Manual, 1=Auto                   
+1128       | E02 | Superheat in Heating         | 40      | 0x0028  | 0.1   | 4.0 °C        | -10 .. 10 °C (Default: 5.0)   | int16 (/10 °C)                           
+1129       | E03 | Superheat Comp 1 Heat        | 5       | 0x0005  | 0.1   | 0.5 °C        | -10 .. 10 °C (Default: 1.0)   | int16 (/10 °C)                           
+1130       | E04 | Superheat Comp 2 Heat        | 5       | 0x0005  | 0.1   | 0.5 °C        | -10 .. 10 °C (Default: 0.5)   | int16 (/10 °C)                           
+1131       | E05 | Initial Steps in Heat        | 350     | 0x015E  | 1     | 350 N         | 0 .. 480 N (Default: 350)     | uint16 (Steps, +50 if AT < 0 °C)         
+1132       | E06 | Initial Steps Comp 1         | 0       | 0x0000  | 1     | 0 N           | 0 .. 200 N (Default: 0)       | uint16 (Steps)                           
+1133       | E07 | Initial Steps Comp 2         | 0       | 0x0000  | 1     | 0 N           | 0 .. 200 N (Default: 0)       | uint16 (Steps)                           
+1134       | E08 | Initial Steps Comp 3         | 0       | 0x0000  | 1     | 0 N           | 0 .. 200 N (Default: 0)       | uint16 (Steps)                           
+1135       | E09 | Min Initial Steps            | 100     | 0x0064  | 1     | 100 N         | 0 .. 200 N (Default: 100)     | uint16 (Steps)                           
+1136       | E10 | Defrost Steps                | 480     | 0x01E0  | 1     | 480 N         | 0 .. 480 N (Default: 480)     | uint16 (Steps)                           
+1137       | E11 | Superheat in Cooling         | 40      | 0x0028  | 0.1   | 4.0 °C        | -10 .. 10 °C (Default: 6.0)   | int16 (/10 °C)                           
+1138       | E12 | Initial Steps in Cool        | 480     | 0x01E0  | 1     | 480 N         | 0 .. 480 N (Default: 350)     | uint16 (Steps)                           
+1139       | E13 | Exhaust Assist Open Time     | 60      | 0x003C  | 1     | 60 min        | 0 .. 100 min (Default: 60)    | uint16 (Minutes)                         
+1140       | E14 | Suction Superheat Open Time  | 24      | 0x0018  | 1     | 24 min        | 0 .. 100 min (Default: 24)    | uint16 (Minutes)                         
+1141       | E15 | Control P Value              | 5       | 0x0005  | 1     | 5             | 0 .. 100 (Default: 5)         | uint16 (P)                               
+1142       | E16 | Control I Value              | 3       | 0x0003  | 1     | 3             | 0 .. 100 (Default: 32)        | uint16 (I)                               
+1143       | E17 | Control D Value              | 0       | 0x0000  | 1     | 0             | 0 .. 100 (Default: 0)         | uint16 (D)                               
+1144       | E18 | Manual Steps                 | 0       | 0x0000  | 1     | 0 N           | 0 .. 550 N (Default: 0)       | uint16 (Steps)                           
+1145       | E19 | Superheat Comp 1 (Cool)      | 20      | 0x0014  | 0.1   | 2.0 °C        | -10 .. 10 °C (Default: 2.0)   | int16 (/10 °C)                           
+1146       | E20 | Superheat Comp 2 (Cool)      | 40      | 0x0028  | 0.1   | 4.0 °C        | -10 .. 10 °C (Default: 4.0)   | int16 (/10 °C)                           
+1147..1159 | -   | Reserved                     | 0       | 0x0000  | 1     | 0             | -                             | uint16 (Reg 1147 to 1159)                
+1160       | G01 | Disinfection Setpoint        | 650     | 0x028A  | 0.1   | 65.0 °C       | 60 .. 70 °C (Default: 70.0)   | int16 (/10 °C)                           
+1161       | G02 | Time of Duration             | 5       | 0x0005  | 1     | 5 min         | 0 .. 60 min (Default: 0)      | uint16 (Minutes, 0=Disabled)             
+1162       | G03 | Start Time                   | 1       | 0x0001  | 1     | 1 h           | 0 .. 23 h (Default: 0)        | uint16 (Hour 0-23)                       
+1163       | G04 | Work Cycle                   | 30      | 0x001E  | 1     | 30 Days       | 1 .. 30 Days (Default: 7)     | uint16 (Days)                            
+1164..1166 | -   | Reserved                     | 0       | 0x0000  | 1     | 0             | -                             | uint16 (Reg 1164 to 1166)                
+1167       | P01 | Pump Running Mode            | 1       | 0x0001  | 1     | Special       | 0 .. 2 (Default: 1 / Special) | enum: 0=Ordinary, 1=Special, 2=Interval  
+1168       | P02 | Pump Interval Time           | 30      | 0x001E  | 1     | 30 min        | 0 .. 120 min (Default: 30)    | uint16 (Minutes)                         
+1169       | P03 | Pump Running Duration        | 3       | 0x0003  | 1     | 3 min         | 0 .. 30 min (Default: 3)      | uint16 (Minutes)                         
+1170       | P04 | Pump Advanced Start Time     | 3       | 0x0003  | 1     | 3 min         | 0 .. 30 min (Default: 1)      | uint16 (Minutes lead time)               
+1171       | P05 | Pump Manual-control          | 0       | 0x0000  | 1     | No            | 0 .. 1 (Default: 0 / No)      | enum: 0=No, 1=Yes                        
+1172..1180 | -   | Reserved                     | 0       | 0x0000  | 1     | 0             | -                             | uint16 (Reg 1172 to 1180)                
+
+
+--------------------------------------------------------------------------------
+3.3 BLOCK 3: REGISTERS 1181 - 1270 (TEMP SETPOINTS, WEATHER COMP, TIMERS)
+--------------------------------------------------------------------------------
+Reg        | ID  | Parameter Name                   | Raw Val | Dec/Hex | Scale | Display Value | Manual Range & Default         | Data Type / Options                        
+-----------+-----+----------------------------------+---------+---------+-------+---------------+--------------------------------+--------------------------------------------
+1181..1189 | -   | Reserved                         | 0       | 0x0000  | 1     | 0             | -                              | uint16 (Reg 1181 to 1189)                  
+1190       | -   | Block 3 Address Confirmation     | 1181    | 0x049D  | 1     | 1181          | 1181                           | uint16 (Constant)                          
+1191       | R01 | Hot Water Setpoint               | 505     | 0x01F9  | 0.1   | 50.5 °C       | R06 .. R07 (Default: 55.0)     | int16 (/10 °C, Step: 0.5 °C)               
+1192       | R02 | Heating Setpoint                 | 220     | 0x00DC  | 0.1   | 22.0 °C       | R08 .. R09 (Default: 40.0)     | int16 (/10 °C, Step: 0.5 °C)               
+1193       | R03 | Cooling Setpoint                 | 200     | 0x00C8  | 0.1   | 20.0 °C       | R10 .. R11 (Default: 12.0)     | int16 (/10 °C, Step: 0.5 °C)               
+1194       | R04 | Power-on Return Diff             | 30      | 0x001E  | 0.1   | 3.0 °C        | 0 .. 10 °C (Default: 2/5)      | int16 (/10 °C, Hysteresis)                 
+1195       | R05 | Standby Temp Diff                | 30      | 0x001E  | 0.1   | 3.0 °C        | 0 .. 10 °C (Default: 2/5)      | int16 (/10 °C, Hysteresis)                 
+1196       | R06 | Min Hot Water Setpoint           | 400     | 0x0190  | 0.1   | 40.0 °C       | 0 .. R07 (Default: 40.0)       | int16 (/10 °C)                             
+1197       | R07 | Max Hot Water Setpoint           | 650     | 0x028A  | 0.1   | 65.0 °C       | R06 .. 65 °C (Default: 65.0)   | int16 (/10 °C)                             
+1198       | R08 | Min Heating Setpoint             | 200     | 0x00C8  | 0.1   | 20.0 °C       | 20 .. 30 °C (Default: 30.0)    | int16 (/10 °C)                             
+1199       | R09 | Max Heating Setpoint             | 500     | 0x01F4  | 0.1   | 50.0 °C       | 30 .. 60 °C (Default: 50.0)    | int16 (/10 °C)                             
+1200       | R10 | Min Cooling Setpoint             | 120     | 0x0078  | 0.1   | 12.0 °C       | 8 .. 20 °C (Default: 12.0)     | int16 (/10 °C)                             
+1201       | R11 | Max Cooling Setpoint             | 200     | 0x00C8  | 0.1   | 20.0 °C       | 20 .. 30 °C (Default: 20.0)    | int16 (/10 °C)                             
+1202       | R12 | Electric Heating Mode            | 0       | 0x0000  | 1     | Not used      | 0 .. 2 (Default: 0 / Not used) | enum: 0=Not used, 1=Waterline, 2=Water tank
+1203       | R13 | Electric-heater Start Diff       | 50      | 0x0032  | 0.1   | 5.0 °C        | 0 .. 10 °C (Default: 5.0)      | int16 (/10 °C)                             
+1204       | R14 | Electric-heater Start AT         | 20      | 0x0014  | 0.1   | 2.0 °C        | -10 .. 30 °C (Default: 5.0)    | int16 (/10 °C)                             
+1205       | R15 | Delay of Electric-heater         | 45      | 0x002D  | 1     | 45 min        | 0 .. 60 min (Default: 30)      | uint16 (Minutes)                           
+1206       | R16 | Electric-heater Instant Start AT | -50     | 0xFFCE  | 0.1   | -5.0 °C       | -30 .. 20 °C (Default: 2.0)    | int16 signed (/10 °C)                      
+1207       | R17 | Compensation-ON Low AT           | 0       | 0x0000  | 0.1   | 0.0 °C        | R18 .. 0 °C (Default: -30.0)   | int16 (/10 °C)                             
+1208       | R18 | Compensation-OFF Low AT          | -150    | 0xFF6A  | 0.1   | -15.0 °C      | -30 .. R17 (Default: -30.0)    | int16 signed (/10 °C)                      
+1209       | R19 | Low-AT Max-Compensation Target   | 450     | 0x01C2  | 0.1   | 45.0 °C       | 20 .. 60 °C (Default: 45.0)    | int16 (/10 °C)                             
+1210       | R20 | Compensation-ON High AT          | 550     | 0x0226  | 0.1   | 55.0 °C       | 10 .. R21 (Default: 55.0)      | int16 (/10 °C)                             
+1211       | R21 | Compensation-OFF High AT         | 550     | 0x0226  | 0.1   | 55.0 °C       | R20 .. 60 °C (Default: 55.0)   | int16 (/10 °C)                             
+1212       | R22 | High-AT Max-Compensation Target  | 450     | 0x01C2  | 0.1   | 45.0 °C       | 20 .. 60 °C (Default: 45.0)    | int16 (/10 °C)                             
+1213..1254 | -   | Reserved                         | 0       | 0x0000  | 1     | 0             | -                              | uint16 (Reg 1213 to 1254)                  
+1255       | T01 | Timer 1 (ON) Enable              | 1       | 0x0001  | 1     | On (Active)   | 0 .. 1 (Default: 0 / Disabled) | enum: 0=Disabled, 1=Enabled                
+1256       | T02 | Timer 1 (ON) Hour                | 16      | 0x0010  | 1     | 16            | 0 .. 23 h (Default: 0)         | uint16 (Hour 0-23)                         
+1257       | T03 | Timer 2 (OFF) Enable             | 1       | 0x0001  | 1     | Off (Active)  | 0 .. 1 (Default: 0 / Disabled) | enum: 0=Disabled, 1=Enabled                
+1258       | T04 | Timer 2 (OFF) Hour               | 20      | 0x0014  | 1     | 20            | 0 .. 23 h (Default: 0)         | uint16 (Hour 0-23)                         
+1259       | T05 | Timer 1 (ON) Minute              | 0       | 0x0000  | 1     | 0             | 0 .. 59 min (Default: 0)       | uint16 (Minute 0-59)                       
+1260       | T06 | Timer 2 (OFF) Minute             | 0       | 0x0000  | 1     | 0             | 0 .. 59 min (Default: 0)       | uint16 (Minute 0-59)                       
+1261       | -   | Mute Timer Start Minute          | 0       | 0x0000  | 1     | 0 min         | 0 .. 59 min (Default: 0)       | uint16 (Minute 0-59)                       
+1262       | -   | Mute Timer End Minute            | 0       | 0x0000  | 1     | 0 min         | 0 .. 59 min (Default: 0)       | uint16 (Minute 0-59)                       
+1263..1270 | -   | Reserved                         | 0       | 0x0000  | 1     | 0             | -                              | uint16 (Reg 1263 to 1270)                  
+
+
+================================================================================
+4. VERIFICATION: MODBUS PACKET DATA VS DISPLAY SCREENSHOT VALUES & MANUAL
+================================================================================
+
+All parameters photographed across the 31 display screens correlate with the 
+captured Modbus RTU payload buffers and the official manufacturer manual:
+
+1. Negative Temperatures (Two's Complement 16-bit):
+   - Screen Protect A04: Shutdown Ambient Temp = -20.0 °C
+     Packet Reg 1043 bytes: [255, 56] -> 0xFF38 = 65336 -> Signed Int16 = -200 -> -20.0 °C
+   - Screen Defrost D08: Sliding Low Point of AT = -15.0 °C
+     Packet Reg 1108 bytes: [255, 106] -> 0xFF6A = 65386 -> Signed Int16 = -150 -> -15.0 °C
+   - Screen Temp R16: Electric-heater Start at Once AT = -5.0 °C
+     Packet Reg 1206 bytes: [255, 206] -> 0xFFCE = 65486 -> Signed Int16 = -50 -> -5.0 °C
+   - Screen Temp R18: Compensation-OFF low AT = -15.0 °C
+     Packet Reg 1208 bytes: [255, 106] -> 0xFF6A = 65386 -> Signed Int16 = -150 -> -15.0 °C
+
+2. Enumerations Discovered from Popup Menus & Verified Against Manual:
+   - R12 (Electric Heating Mode):
+     0 = Not used 
+     1 = Waterline (Heating Circuit)
+     2 = Water tank 
+     (Current packet: 0)
+   - E01 (EEV Adjustment Mode):
+     0 = Manual
+     1 = Auto
+     (Current packet: 1)
+   - P01 (Pump Running Mode):
+     0 = Ordinary 
+     1 = Special 
+     2 = Interval
+     (Current packet: 1)
+   - H01 (Auto start / Power Outage Memory):
+     0 = No (Remain OFF after outage)
+     1 = Yes (Remember power state)
+     (Current packet: 1)
+   - H02 (Master/Slave Unit):
+     0 = Master
+     1 = Slave
+     (Current packet: 0)
+   - H04 (4-way Valve Polarity):
+     0 = On-heating
+     1 = Off-heating
+     (Current packet: 0 -> Display value: On-heating)
+   - H05 (3-way Valve Polarity):
+     0 = On-heat water
+     1 = Off-heat water
+     (Current packet: 1 -> Display value: Off-heat water)
+
+3. System Timer (Screenshot 3):
+   - Timer ON: Hour 16, Min 0 -> Reg 1255 = 1 (Active), Reg 1256 = 16, Reg 1259 = 0
+   - Timer OFF: Hour 20, Min 0 -> Reg 1257 = 1 (Active), Reg 1258 = 20, Reg 1260 = 0
+
+
+================================================================================
+5. CORRECTIONS TO INITIAL HYPOTHESES IN heatpump_rs485_protocol_spec.txt
+================================================================================
+Early reverse-engineering speculative guesses in heatpump_rs485_protocol_spec.txt 
+have now been conclusively verified and corrected by the official manual:
+
+Previous Speculation                       | Correct Reality (from Display Screenshots & Manual)       
+-------------------------------------------+-----------------------------------------------------------
+Reg 1021: "0=Off-heating, 1=On-heating"    | H04: 0 = On-heating, 1 = Off-heating                      
+Reg 1022: "0=Off-heat water, 1=On-water"   | H05: 0 = On-heat water, 1 = Off-heat water                
+Reg 1040: "DHW setpoint (50 °C)"           | A01: Antifreeze Temp (5.0 °C, scale 0.1)                  
+Reg 1043: "Heating curve lower limit"      | A04: Shutdown Ambient Temp (-20.0 °C)                     
+Reg 1045: "Heating water setpoint"         | A06: Spray Valve Open Temp (35.0 °C)                      
+Reg 1060: "Target temp limit (30.0 °C)"    | F02: Min Speed in Heating (300 rpm)                       
+Reg 1069: "Room temp setpoint (22 °C)"     | F11: Mute Timer Start Hour (22 h)                         
+Reg 1070: Unknown / internal state (1)     | F12: Mute Timer End Hour (1 h)                            
+Reg 1071: "Heating circuit target (45 °C)" | F13: Mute Mode Fan Speed (450 rpm)                        
+Reg 1072: "Max allowed temp limit (60 °C)" | F14: DC/EC Fan Rated Speed (600 rpm)                      
+Reg 1101: "15.0 °C operating param"        | D01: Exit Defrosting Setpoint (15.0 °C)                   
+Reg 1102: "25.0 °C operating param"        | D02: Exit Defrosting Pressure (25.0 bar)                  
+Reg 1105: "59"                             | D05: Sliding High Point Under LP (5.9 bar)                
+Reg 1106: "28"                             | D06: Sliding Low Point Under LP (2.8 bar)                 
+Reg 1107: "40"                             | D07: Sliding High Point of AT (4.0 °C)                    
+Reg 1108: "-15.0 °C operating param"       | D08: Sliding Low Point of AT (-15.0 °C)                   
+Reg 1136: "480"                            | E10: Defrost Steps (480 N)                                
+Reg 1138: "480"                            | E12: Initial Steps in Cooling (480 N)                     
+Reg 1139: "60"                             | E13: Exhaust Assist Open Time (60 min)                    
+Reg 1140: "24"                             | E14: Suction Superheat Open Time (24 min)                 
+Reg 1160: "650"                            | G01: Disinfection Setpoint (65.0 °C)                      
+Reg 1163: "30"                             | G04: Disinfection Work Cycle (30 Days)                    
+Reg 1167: "1"                              | P01: Pump Running Mode (1 = Special)                      
+Reg 1168: "30"                             | P02: Pump Running Interval Time (30 min)                  
+Reg 1169: "3"                              | P03: Pump Running Duration (3 min)                        
+Reg 1170: "3"                              | P04: Pump Advanced Start Time (3 min)                     
+Reg 1205: "45"                             | R15: Delay of Electric-heater (45 min)                    
+Reg 1209..1212: "Slope limits"             | R19..R22: Weather Compensation Setpoint & Slope Parameters
+Reg 1255..1258: "Mode flags"               | T01..T04: System Timer ON/OFF Hours and States            
+
+
+================================================================================
+6. MAIN CONFIGURATION REGISTERS FOR USER INTERFACE (PRIMARY CONTROLS)
+================================================================================
+
+The following table lists the primary user-facing configuration registers 
+essential for dashboards, Home Assistant UI, touch screens, and external automation:
+
+Reg  | Modbus Hex | Block (Flag)   | UI Parameter Name           | Allowed Values / Options / Range                        | Scale | Step | Unit | Recommended UI Component | HA Entity Key                  
+-----+------------+----------------+-----------------------------+---------------------------------------------------------+-------+------+------+--------------------------+--------------------------------
+1011 | 0x03EB     | Block 1 (0x02) | State (Power ON/OFF)        | 0 = Off, 1 = On                                         | 1     | 1    | -    | Toggle Switch            | switch.hp_power_state          
+1012 | 0x03EC     | Block 1 (0x02) | Mode (Operating Mode)       | 0=Hot Water, 1=Heating, 2=Cooling, 3=HW+Heat, 4=HW+Cool | 1     | 1    | -    | Dropdown / Select        | select.hp_operating_mode       
+1031 | 0x03FF     | Block 1 (0x02) | Electric Heater (H14)       | 0 = Off, 1 = On                                         | 1     | 1    | -    | Toggle Switch            | switch.hp_electric_heater      
+1074 | 0x0432     | Block 1 (0x02) | Fast Mute (Quiet Mode)      | 0 = Off, 1 = On (Active 8h)                             | 1     | 1    | -    | Toggle Switch            | switch.hp_fast_mute            
+1068 | 0x042C     | Block 1 (0x02) | Mute Timer (F10)            | 0 = Off (No), 1 = On (Yes)                              | 1     | 1    | -    | Toggle Switch            | switch.hp_mute_timer_enable    
+1069 | 0x042D     | Block 1 (0x02) | Mute Timer Start Hour (F11) | 0 .. 23                                                 | 1     | 1    | h    | Number Box / Time (HH)   | number.hp_mute_start_hour      
+1261 | 0x04ED     | Block 3 (0x08) | Mute Timer Start Min        | 0 .. 59                                                 | 1     | 1    | min  | Number Box / Time (MM)   | number.hp_mute_start_minute    
+1070 | 0x042E     | Block 1 (0x02) | Mute Timer End Hour (F12)   | 0 .. 23                                                 | 1     | 1    | h    | Number Box / Time (HH)   | number.hp_mute_end_hour        
+1262 | 0x04EE     | Block 3 (0x08) | Mute Timer End Min          | 0 .. 59                                                 | 1     | 1    | min  | Number Box / Time (MM)   | number.hp_mute_end_minute      
+1191 | 0x04A7     | Block 3 (0x08) | Hot Water Setpoint (R01)    | R06 .. R07 (Def: 40.0 .. 65.0, factory def: 55.0)       | 0.1   | 0.5  | °C   | Number Box / Thermostat  | number.hp_boiler_target_temp   
+1192 | 0x04A8     | Block 3 (0x08) | Heating Setpoint (R02)      | R08 .. R09 (Def: 20.0 .. 50.0, factory def: 40.0)       | 0.1   | 0.5  | °C   | Number Box / Thermostat  | number.hp_heating_target_temp  
+1193 | 0x04A9     | Block 3 (0x08) | Cooling Setpoint (R03)      | R10 .. R11 (Def: 12.0 .. 20.0, factory def: 12.0)       | 0.1   | 0.5  | °C   | Number Box / Thermostat  | number.hp_cooling_target_temp  
+1255 | 0x04E7     | Block 3 (0x08) | Timer 1 (ON) Enable (T01)   | 0 = Disabled, 1 = Enabled                               | 1     | 1    | -    | Toggle Switch            | switch.hp_timer_1_enable       
+1256 | 0x04E8     | Block 3 (0x08) | Timer 1 (ON) Hour (T02)     | 0 .. 23                                                 | 1     | 1    | h    | Number Box / Time (HH)   | number.hp_timer_1_hour         
+1259 | 0x04EB     | Block 3 (0x08) | Timer 1 (ON) Minute (T05)   | 0 .. 59                                                 | 1     | 1    | min  | Number Box / Time (MM)   | number.hp_timer_1_minute       
+1257 | 0x04E9     | Block 3 (0x08) | Timer 2 (OFF) Enable (T03)  | 0 = Disabled, 1 = Enabled                               | 1     | 1    | -    | Toggle Switch            | switch.hp_timer_2_enable       
+1258 | 0x04EA     | Block 3 (0x08) | Timer 2 (OFF) Hour (T04)    | 0 .. 23                                                 | 1     | 1    | h    | Number Box / Time (HH)   | number.hp_timer_2_hour         
+1260 | 0x04EC     | Block 3 (0x08) | Timer 2 (OFF) Minute (T06)  | 0 .. 59                                                 | 1     | 1    | min  | Number Box / Time (MM)   | number.hp_timer_2_minute       
+1167 | 0x048F     | Block 2 (0x04) | Pump Running Mode (P01)     | 0 = Ordinary, 1 = Special, 2 = Interval                 | 1     | 1    | -    | Dropdown / Select        | select.hp_pump_running_mode    
+1168 | 0x0490     | Block 2 (0x04) | Pump Running Interval (P02) | 0 .. 120                                                | 1     | 1    | min  | Number Box / Slider      | number.hp_pump_running_interval
+1169 | 0x0491     | Block 2 (0x04) | Pump Running Duration (P03) | 0 .. 30                                                 | 1     | 1    | min  | Number Box / Slider      | number.hp_pump_running_duration
+
+
+================================================================================
+7. OPERATIONAL CONTROL LOGIC & SAFETY THRESHOLDS (FROM MANUAL)
+================================================================================
+
+7.1 Antifreeze Protection (Parameters A01..A04):
+- Cooling Mode: After compressor start, outlet water temp T02 is monitored.
+  If T02 < A01 (default 5.0 °C) OR suction pressure < A02 (default 2.0 bar) for 10s,
+  unit enters antifreeze protection (after compressor has run 5 minutes).
+- Heating / Hot Water Mode: If T02 < T01 - 2.0 °C AND T02 < A01 (5.0 °C), unit
+  enters antifreeze protection.
+- Protection Action: Unit stops compressor, 4-way valve remains unchanged, water pump
+  KEEPS RUNNING.
+- Automatic Reset: When T02 > A01 + A03 (default 5.0 + 2.0 = 7.0 °C) OR suction pressure
+  recovers to >= A02.
+- Manual Lockout: If antifreeze protection trips > 3 times within 30 minutes, automatic
+  restart is inhibited (requires manual service reset).
+- Low Ambient Temperature Lockout (A04): If ambient temp T07 < A04 (default -20.0 °C), unit
+  will not start heat pump compressor. (Does not inhibit auxiliary electric heater; if
+  heater runs, pump must run). Resumes when T07 > A04 + 2.0 °C.
+
+7.2 Defrosting Control Logic (Parameters D01..D11):
+- Defrost Initiation:
+  1. Monitored 1 minute after compressor starts. If suction pressure < D05 (sliding low
+     pressure threshold, default 5.3 bar / -12 °C), timed defrost countdown begins.
+  2. If pressure sensor is faulty, timed defrost cycle D03 (default 45 min) with duration
+     D04 (default 8 min) is automatically used.
+- Defrost Sequence:
+  (A) Compressor slows down to 30 Hz.
+  (B) At 55s, fan motor stops and 4-way valve reverses direction.
+  (C) At 60s (+5s), compressor ramps up to defrost frequency D11 (default 70 Hz).
+  (D) If D10 = 1, electric heater is forced ON during defrost.
+- Defrost Termination:
+  Normal exit when discharge pressure T09 > D02 (default 25 bar / 41 °C) AND coil temp
+  T06 > D01 (default 13.0 °C), OR when maximum defrost time D04 (default 8 min) elapses.
+  Unit then drops to 30 Hz, reverses 4-way valve, restarts fan after 55s, and ramps up.
+
+7.3 Electronic Expansion Valve Control (Parameters E01..E20):
+- Compressor Start: EEV maintains initial position for the first 3 minutes.
+  Initial heating steps = E05 (default 350 N) if ambient T07 >= 0 °C, or E05 + 50 N if T07 < 0 °C.
+- After 3 minutes, automatic PID regulation takes over targeting superheat E02 (default 5.0 °C)
+  and cooling superheat E11 (default 6.0 °C).
+- Unit Shutdown: EEV opens to 480 steps for 2 minutes, then completely closes to 0 steps.
+- Post-Defrost: EEV returns to initial position for 3 minutes before superheat PID re-engages.
+
+7.4 Circulation Water Pump Staging (Parameters P01..P05):
+- Lead & Overrun Timing: Pump starts at least P04 (default 1 min) before the compressor starts,
+  and continues running for 2 minutes after the compressor stops.
+- Flow Switch Guard: Controller begins monitoring water flow switch S03 after P04 - 10s.
+  Once flow switch is closed continuously for 10s, compressor is permitted to start.
+- Running Modes (P01):
+  * 0 = Ordinary (Continuous pump run)
+  * 1 = Special (Linked with compressor + overrun)
+  * 2 = Interval (Cycle interval P02 with run duration P03)
+
+7.5 Weather Compensation Heating Curves (Parameters R17..R22):
+- Low Ambient Temp Curve:
+  * R17 = Compensation-ON Low AT (Default 0.0 °C or -30.0 °C)
+  * R18 = Compensation-OFF Low AT (Default -30.0 °C)
+  * R19 = Max Compensation Target Temperature at Low AT (Default 45.0 °C)
+- High Ambient Temp Curve:
+  * R20 = Compensation-ON High AT (Default 55.0 °C)
+  * R21 = Compensation-OFF High AT (Default 55.0 °C)
+  * R22 = Max Compensation Target Temperature at High AT (Default 45.0 °C)
+
+
+================================================================================
+8. HARDWARE I/O SPECIFICATION (CODE 022) & CORRESPONDING TELEMETRY REGISTERS
+================================================================================
+
+8.1 Digital Outputs (Relays - 5A / 250VAC):
+ID  | Terminal | Equipment Name                   | Modbus Telemetry Bit  | Logic / Active State          
+----+----------+----------------------------------+-----------------------+-------------------------------
+O01 | RO01     | Compressor Inverter Drive Enable | Reg 2019 Bit 0 (LSB)  | 1 = ON, 0 = OFF               
+O02 | RO02     | Primary Circulation Water Pump   | Reg 2019 Bit 1 (LSB)  | 1 = ON, 0 = OFF               
+O03 | RO03     | 4-way Reversing Valve            | Reg 2019 Bit 2 (LSB)  | 1 = ON (Heat/Defrost), 0 = OFF
+O04 | RO04     | Fan Motor Relay                  | Reg 2019 Bit 3 (LSB)  | 1 = ON, 0 = OFF               
+O05 | -        | Reserved                         | Reg 2019 Bit 4 (LSB)  | -                             
+O06 | RO06     | Basepan Antifreeze Heating Cable | Reg 2019 Bit 5 (LSB)  | 1 = ON, 0 = OFF               
+O07 | RO07     | Crankcase Antifreeze Cable       | Reg 2019 Bit 6 (LSB)  | 1 = ON, 0 = OFF               
+O08 | RO08     | Vapor Injection / Spray Valve    | Reg 2019 Bit 7 (LSB)  | 1 = ON, 0 = OFF               
+O09 | RO09     | Auxiliary Electric Backup Heater | Reg 2019 Bit 8 (MSB)  | 1 = ON, 0 = OFF               
+O10 | RO10     | Reserved                         | Reg 2019 Bit 9 (MSB)  | -                             
+O11 | RO11     | General Alarm Output Signal      | Reg 2019 Bit 10 (MSB) | 1 = ALARM, 0 = OK             
+O12 | RO12     | DHW Water Circulation Pump       | Reg 2019 Bit 11 (MSB) | 1 = ON, 0 = OFF               
+O13 | RO13     | 3-way Diverting Valve (DHW/Heat) | Reg 2019 Bit 12 (MSB) | 1 = DHW, 0 = Space Heat       
+O14 | -        | Electronic Expansion Valve Steps | Reg 2020 (0-500 N)    | 0 .. 500 Steps (Actuator)     
+
+8.2 Digital Inputs & Safety Switches:
+ID  | Terminal | Switch Name                      | Modbus Register Bit | Logic / Active State                    
+----+----------+----------------------------------+---------------------+-----------------------------------------
+S01 | AI/DI 23 | High Pressure Switch             | Reg 2034 Bit 0      | 0 = Closed (OK), 1 = Open (Fault)       
+S02 | AI/DI 24 | Low Pressure Switch              | Reg 2034 Bit 1      | 0 = Closed (OK), 1 = Open (Fault)       
+S03 | AI/DI 25 | Water Flow Switch                | Reg 2034 Bit 2      | 0 = Closed (Flow OK), 1 = Open (No Flow)
+S04 | AI/DI 26 | Emergency / Remote ON/OFF Switch | Reg 2034 Bit 3      | 0 = Closed (Run), 1 = Open (Stop)       
+S05 | AI/DI 27 | Mode Switch                      | Reg 2034 Bit 4      | 0 = Closed (Heating), 1 = Open (Cooling)
+S06 | -        | Reserved                         | Reg 2034 Bit 5      | -                                       
+S07 | AI/DI 29 | Electric Heater Overload Switch  | Reg 2034 Bit 6      | 0 = Closed (OK), 1 = Open (Trip)        
+S08 | -        | Reserved                         | Reg 2034 Bit 7      | -                                       
+
+Active Fault Code Register:
+- Register 2085 (Byte Offsets 175-176) carries the active numerical error/fault code
+  when any alarm occurs (e.g. E11, E12, E032, F01..F26).
+
+8.3 Analog Temperature & Pressure Sensors:
+ID  | Terminal | Sensor Name                        | Sensor Type / Curve    | Modbus Reg | Scale  
+----+----------+------------------------------------+------------------------+------------+--------
+T01 | AI/DI 01 | Inlet Water Temperature            | NTC 5kΩ @ 25°C         | Reg 2045   | 0.1 °C 
+T02 | AI/DI 02 | Outlet Water Temperature           | NTC 5kΩ @ 25°C         | Reg 2046   | 0.1 °C 
+T03 | AI/DI 03 | Discharge Gas Temperature          | NTC 50kΩ @ 25°C        | Reg 2047   | 0.1 °C 
+T04 | AI/DI 08 | Water Tank / DHW Boiler Temp       | NTC 10kΩ @ 25°C        | Reg 2048   | 0.1 °C 
+T05 | AI/DI 05 | Suction Gas Temperature            | NTC 5kΩ @ 25°C         | Reg 2049   | 0.1 °C 
+T06 | AI/DI 06 | Evaporator Coil Temperature        | NTC 5kΩ @ 25°C         | Reg 2050   | 0.1 °C 
+T07 | AI/DI 07 | Outdoor Ambient Temperature        | NTC 5kΩ @ 25°C         | Reg 2051   | 0.1 °C 
+T08 | AI/DI 21 | Suction Low Pressure Transducer    | Ratiometric (0-20 bar) | Reg 2052   | 0.1 bar
+T09 | AI/DI 22 | Discharge High Pressure Transducer | Ratiometric (0-50 bar) | Reg 2053   | 0.1 bar
+
+8.4 Inverter, Electrical & Fan Telemetry Status:
+ID  | Parameter Name                  | Description / Subsystem                  | Modbus Reg | Scale / Unit
+----+---------------------------------+------------------------------------------+------------+-------------
+T10 | Actual Compressor Frequency     | Live inverter compressor frequency       | Reg 2054   | 1.0 Hz      
+T11 | Target Compressor Frequency     | Target PID requested frequency           | Reg 2055   | 1.0 Hz      
+T12 | Fan Motor 1 Actual Speed        | Current speed of primary DC fan motor    | Reg 2056   | 1 rpm       
+T13 | Fan Motor 2 Actual Speed        | Current speed of secondary DC fan motor  | Reg 2057   | 1 rpm       
+T14 | Suction Superheat               | Evaporator suction superheat calculation | Reg 2058   | 0.1 °C      
+T15 | Discharge Superheat             | Discharge gas superheat calculation      | Reg 2059   | 0.1 °C      
+T16 | Inverter Module Protection Temp | Heatsink / IPM thermal protection temp   | Reg 2060   | 0.1 °C      
+T17 | AC Input Mains Voltage          | Grid input RMS voltage                   | Reg 2061   | 1.0 V       
+T18 | AC Input Mains Current          | Total grid input AC RMS current          | Reg 2062   | 0.1 A       
+T19 | Compressor Phase Current        | Inverter output U/V/W phase current      | Reg 2063   | 0.1 A       
+T20 | DC Bus Voltage                  | Internal high voltage DC link rail       | Reg 2064   | 1.0 V       
+T21 | Inverter Temp IPM/PIM           | Power module internal thermistor temp    | Reg 2065   | 0.1 °C      
+T22 | Target Fan Speed                | Controller requested fan motor speed     | Reg 2067   | 1 rpm       
+
+
+================================================================================
+9. COMPREHENSIVE FAULT & ALARM CODE MATRIX (MANUAL SPECIFICATION)
+================================================================================
+When a safety protection trips or a component enters a fault state, the heat pump
+main controller registers an alarm. The alarm is displayed on the physical LCD display,
+logged in failure history ("Failure Logging" screen, access code 066 / 022),
+broadcast via telemetry (Register 2085 and Register 2034 bitfield), and triggers
+the general alarm output relay RO11 (Register 2019 Bit 10).
+
+--------------------------------------------------------------------------------
+9.1 Temperature & Pressure Sensor Fault Codes (P-Codes & PP-Codes)
+--------------------------------------------------------------------------------
+Code | Subsystem / Function     | Fault Description                | Cause / Condition                  | Recovery / Remedy                        
+-----+--------------------------+----------------------------------+------------------------------------+------------------------------------------
+P01  | Water Circuit (Inlet)    | Inlet Water Temp Sensor Fault    | Sensor damaged, open or short circ | Check / replace sensor T01 (NTC 5k)      
+P02  | Water Circuit (Outlet)   | Outlet Water Temp Sensor Fault   | Sensor damaged, open or short circ | Check / replace sensor T02 (NTC 5k)      
+P03  | Water Circuit (DHW Tank) | Water Tank / DHW Temp Sensor     | Sensor damaged, open or short circ | Check / replace sensor T04 (NTC 10k)     
+P04  | Environment (Outdoor)    | Ambient Outdoor Temp Sensor      | Sensor damaged, open or short circ | Check / replace sensor T07 (NTC 5k)      
+P17  | Refrigerant (Suction)    | Suction Gas Temp Sensor Fault    | Sensor damaged, open or short circ | Check / replace sensor T05 (NTC 5k)      
+P153 | Refrigerant (Evaporator) | Evaporator Coil Temp Sensor      | Sensor damaged, open or short circ | Check / replace sensor T06 (NTC 5k)      
+P181 | Refrigerant (Discharge)  | Discharge Gas Temp Sensor Fault  | Sensor damaged, open or short circ | Check / replace sensor T03 (NTC 50k)     
+P182 | Refrigerant (Superheat)  | Discharge Superheat Sensor Fault | Sensor damaged, open or short circ | Check / replace sensor T03               
+PP1  | Pressure (High Side)     | Discharge High Pressure Sensor   | Pressure transducer faulty/broken  | Check / replace transducer T09 (0-50 bar)
+PP2  | Pressure (Low Side)      | Suction Low Pressure Sensor      | Pressure transducer faulty/broken  | Check / replace transducer T08 (0-20 bar)
+
+--------------------------------------------------------------------------------
+9.2 System Safety & Operational Protection Codes (E-Codes)
+--------------------------------------------------------------------------------
+Code | Subsystem / Function          | Fault Description                | Cause / Condition                   | Recovery / Remedy                   
+-----+-------------------------------+----------------------------------+-------------------------------------+-------------------------------------
+TP   | Thermal Protection            | Low Ambient Temp Protection      | Ambient temp T07 < A04 (-20 °C)     | Auto resumes when T07 > A04 + 2 °C  
+E04  | Electrical Circuit            | Electrical Circuit Overheat      | Compressor overload / circuit hot   | Check compressor electrical load    
+E06  | Water System                  | Excess Water Temp Difference     | Large temp diff between T01 & T02   | Check water flow, pump, bypass      
+E08  | Communication                 | Main Board <-> LCD Display Comm  | Communication cable/wiring failure  | Check RS-485 bus / connection       
+E11  | Safety Switch (High Pressure) | High Pressure Protection Switch  | High pressure switch S01 tripped    | Check refrigerant circuit & S01     
+E12  | Safety Switch (Low Pressure)  | Low Pressure Protection Switch   | Low pressure switch S02 tripped     | Check refrigerant circuit & S02     
+E19  | Frost Protection              | Primary Antifreeze Protection    | Ambient temp low, T02 < A01 (5 °C)  | Pump runs, auto reset: T02 > A01+A03
+E29  | Frost Protection              | Secondary Antifreeze Protection  | Ambient temp critically low         | Secondary freeze guard staging      
+E032 | Water Flow Safety             | Water Flow Switch Protection     | Flow switch S03 open (no water)     | Check water loop, pump, air locks   
+E051 | Compressor Protection         | Compressor Current Overload      | Excessive compressor run current    | Check compressor and power feed     
+E171 | Water System Safety           | Antifreeze Water Flow Protection | Insufficient flow during heating    | Check piping, valves, water flow    
+E081 | Fan Controller Comm           | Fan Motor Speed Controller Comm  | Comm loss between PCB and fan drv   | Check fan inverter RS-485 cable     
+F031 | Fan Drive (Motor 1)           | DC Fan Motor 1 Fault             | Rotor locked or wiring disconnected | Check / replace Fan Motor 1         
+F032 | Fan Drive (Motor 2)           | DC Fan Motor 2 Fault             | Rotor locked or wiring disconnected | Check / replace Fan Motor 2         
+
+--------------------------------------------------------------------------------
+9.3 Inverter Driver & Power Supply Fault Codes (F-Codes)
+--------------------------------------------------------------------------------
+Code | Subsystem / Function    | Fault Description                 | Cause / Condition                   | Recovery / Remedy                      
+-----+-------------------------+-----------------------------------+-------------------------------------+----------------------------------------
+F01  | Compressor Inverter     | Phase Loss / Drive Hardware Fault | Compressor step/drive hardware bad  | Check measuring voltage & drive board  
+F03  | Power Electronics       | Power Factor Correction Circuit   | PFC circuit trip / fuse blown       | Check PFC fuse and circuit             
+F05  | Power Supply (DC Bus)   | DC Bus Overvoltage                | DC bus voltage > overvoltage limit  | Check input AC voltage and DC bus      
+F06  | Power Supply (DC Bus)   | DC Bus Undervoltage               | DC bus voltage < undervoltage limit | Check input AC voltage and DC bus      
+F07  | Power Supply (AC Input) | AC Input Undervoltage / Low Curr  | Input voltage too low -> low curr   | Check AC input voltage supply          
+F08  | Power Supply (AC Input) | AC Input Overcurrent / Overvolt   | Input voltage too high -> high curr | Check AC input voltage supply          
+F09  | IPM Power Module        | IPM Overcurrent / Voltage Sample  | Excessive IPM current / sample err  | Check IPM current measurement          
+F10  | Internal Bus            | DSP to PFC Comm Error             | Loose connection between DSP & PFC  | Check internal board connectors        
+F11  | Microcontroller         | DSP Internal Comm Error           | DSP communication failure           | Check DSP drive board                  
+F12  | Communication           | Inverter Board Comm Error         | Comm failure between Inverter & PCB | Check RS-485 link to Inverter (Slave 4)
+F13  | IPM Power Module        | IPM Module Overheat Shutdown      | Heatsink / IPM temperature too high | Check heatsink paste, airflow, fan     
+F14  | Compressor Motor        | Weak Compressor Magnetism         | Compressor magnetic flux weakened   | Check compressor motor                 
+F15  | Power Supply (AC Mains) | AC Input Missing Phase            | Phase drop on AC mains supply       | Check mains power connection           
+F16  | Current Sensing Circuit | IPM Current Sampling Error        | Sampling circuit faulty             | Check IPM sampling circuit             
+F17  | Thermal Sensor          | Module / Heatsink Temp Sensor     | Heatsink temp sensor open / bad     | Check / replace heatsink sensor        
+F20  | Power Electronics       | IGBT Power Switch Overheat        | IGBT silicon temp sensor too high   | Check cooling / thermal load           
+F21  | Compressor Current      | Compressor Overload Current       | Compressor input current too high   | Check compressor mechanical load       
+F22  | Total Current           | AC Input Total Overcurrent        | Total AC input current too high     | Check unit electrical load             
+F23  | Microcontroller Memory  | EEPROM Memory Error               | MCU EEPROM read/write failure       | Check MCU / memory chip                
+F24  | Firmware Security       | EEPROM Write-Protection Violation | MCU memory protection fault         | Check MCU / firmware integrity         
+F25  | Low Voltage Rail        | Low Voltage on 15V Rail           | V15V rail outside 13.5V - 16.5V     | Check 15V auxiliary power supply       
+F26  | Power Electronics       | IGBT Power Switch Overheat        | IGBT sensor temperature excessive   | Check cooling / thermal load           
+
+
+================================================================================
+10. CONTROLLER HARDWARE, SENSOR TYPES & TERMINAL WIRING (PC8002 PCB)
+================================================================================
+Main PCB Model      : PC8002 (Board assembly: 35005-310738 + 35005-310739)
+Microcontroller     : Dedicated DSP + MCU architecture
+Bus Noise Immunity  : Group pulse resistance up to 4000V
+Bus Transmission Dis: Up to 100 - 200m between outdoor unit PCB and LCD wall controller
+Temperature Control : Superheat regulation accuracy 0.1 °C
+
+Terminal Connections & Ratings:
+- Digital Relays (5A / 250VAC resistive):
+  * RO01 : Compressor Inverter Driver Run Command (O01 / Reg 2019 Bit 0)
+  * RO02 : Primary Circulation Water Pump (O02 / Reg 2019 Bit 1)
+  * RO03 : 4-way Reversing Valve (O03 / Reg 2019 Bit 2)
+  * RO04 : Fan Motor Run Relay (O04 / Reg 2019 Bit 3)
+  * RO06 : Basepan Antifreeze Heating Cable (O06 / Reg 2019 Bit 5)
+  * RO07 : Crankcase Compressor Heating Cable (O07 / Reg 2019 Bit 6)
+  * RO08 : Vapor Injection / Spray Valve (O08 / Reg 2019 Bit 7)
+  * RO09 : Auxiliary Electric Backup Heater / 3kW Boiler (O09 / Reg 2019 Bit 8)
+  * RO11 : General Fault Alarm Signaling (O11 / Reg 2019 Bit 10)
+  * RO12 : DHW Water Circulation Pump (O12 / Reg 2019 Bit 11)
+  * RO13 : 3-way Heating / DHW Diverting Valve (O13 / Reg 2019 Bit 12)
+
+- Analog Inputs & Sensor Specifications:
+  * T01 (Inlet Water Temp)     : Terminal AI/DI 01 -> NTC 5kΩ @ 25°C (Reg 2045, Scale 0.1 °C)
+  * T02 (Outlet Water Temp)    : Terminal AI/DI 02 -> NTC 5kΩ @ 25°C (Reg 2046, Scale 0.1 °C)
+  * T03 (Discharge Gas Temp)   : Terminal AI/DI 03 -> NTC 50kΩ @ 25°C (Reg 2047, Scale 0.1 °C)
+  * T04 (Water Tank / DHW)     : Terminal AI/DI 08 -> NTC 10kΩ @ 25°C (Reg 2048, Scale 0.1 °C)
+  * T05 (Suction Gas Temp)     : Terminal AI/DI 05 -> NTC 5kΩ @ 25°C (Reg 2049, Scale 0.1 °C)
+  * T06 (Evaporator Coil Temp) : Terminal AI/DI 06 -> NTC 5kΩ @ 25°C (Reg 2050, Scale 0.1 °C)
+  * T07 (Ambient Outdoor Temp) : Terminal AI/DI 07 -> NTC 5kΩ @ 25°C (Reg 2051, Scale 0.1 °C)
+  * T08 (Suction Pressure)     : Terminal AI/DI 21 -> 5kΩ / ratiometric 0-20 bar (Reg 2052, Scale 0.1 bar)
+  * T09 (Discharge Pressure)   : Terminal AI/DI 22 -> 5kΩ / ratiometric 0-50 bar (Reg 2053, Scale 0.1 bar)
+
+- Digital Inputs (Dry Contact):
+  * S01 (High Pressure Switch) : Terminal AI/DI 23 (Reg 2034 Bit 0)
+  * S02 (Low Pressure Switch)  : Terminal AI/DI 24 (Reg 2034 Bit 1)
+  * S03 (Water Flow Switch)    : Terminal AI/DI 25 (Reg 2034 Bit 2)
+  * S04 (Emergency / Remote)   : Terminal AI/DI 26 (Reg 2034 Bit 3)
+  * S05 (Mode Switch H/C)      : Terminal AI/DI 27 (Reg 2034 Bit 4)
+  * S07 (Heater Overload Guard): Terminal AI/DI 29 (Reg 2034 Bit 6)
+
+- Stepper Actuator:
+  * EEV (Electronic Expansion Valve): 5-wire stepper, 0 to 500 steps (O14 / Reg 2020)
+
+================================================================================
+END OF SPECIFICATION FILE
+================================================================================

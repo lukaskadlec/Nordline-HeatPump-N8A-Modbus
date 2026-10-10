@@ -11,8 +11,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 940,
-        "y": 80,
+        "x": 880,
+        "y": 100,
         "wires": []
     },
     {
@@ -21,8 +21,8 @@
         "z": "1c00011a6f22edfe",
         "name": "",
         "serial": "7450e794f0202cde",
-        "x": 220,
-        "y": 240,
+        "x": 160,
+        "y": 260,
         "wires": [
             [
                 "56abaeba7eb333f0",
@@ -43,8 +43,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 380,
-        "y": 340,
+        "x": 320,
+        "y": 360,
         "wires": []
     },
     {
@@ -58,8 +58,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 440,
-        "y": 140,
+        "x": 380,
+        "y": 160,
         "wires": [
             [
                 "full_individual_decoder",
@@ -84,8 +84,8 @@
         "drop": true,
         "allowrate": false,
         "outputs": 1,
-        "x": 940,
-        "y": 140,
+        "x": 880,
+        "y": 160,
         "wires": [
             [
                 "8772fc93de3fb2d1",
@@ -97,7 +97,7 @@
         "id": "3e4d23e01991a6f4",
         "type": "inject",
         "z": "1c00011a6f22edfe",
-        "name": "",
+        "name": "Auto Flag 128 (Startup Read-Out)",
         "props": [
             {
                 "p": "payload"
@@ -109,13 +109,13 @@
         ],
         "repeat": "",
         "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
+        "once": true,
+        "onceDelay": 0.5,
         "topic": "",
-        "payload": "Start",
+        "payload": "start_flag_128",
         "payloadType": "str",
-        "x": 1510,
-        "y": 960,
+        "x": 1450,
+        "y": 980,
         "wires": [
             [
                 "b1569ee02102ae62"
@@ -126,23 +126,24 @@
         "id": "b1569ee02102ae62",
         "type": "function",
         "z": "1c00011a6f22edfe",
-        "d": true,
         "name": "LCD Emulator (Slave 1 Responder)",
-        "func": "// =========================================================================\n// LCD EMULATOR (SLAVE 1 RESPONDER)\n// Mapping:\n// - Block 1: Reg 1001..1090 (3, 233) -> FLAG 2\n// - Block 2: Reg 1181..1270 (4, 157) -> FLAG 8\n// =========================================================================\n\nconst BASE_CONFIG_BYTES_1 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,233,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,\n    0,0,0,0,0,0,0,1,0,5,0,1,0,5,0,30,0,80,0,17,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,50,0,20,0,20,255,56,4,76,1,94,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,32,1,44,0,30,0,110,2,38,1,44,1,24,0,200,0,\n    0,0,0,0,22,0,1,1,194,2,88,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0\n];\n\nconst BASE_CONFIG_BYTES_2 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,157,1,244,0,220,0,200,0,30,0,30,1,144,\n    2,138,0,200,1,244,0,120,0,200,0,0,0,50,0,20,0,45,255,206,0,0,255,106,1,194,\n    2,38,2,38,1,194,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,16,0,1,0,20,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n];\n\nfunction getBaseRegisters(bytes, startReg) {\n    const regs = {};\n    const buf = Buffer.from(bytes);\n    for (let i = 0; i < 90; i++) {\n        regs[startReg + i] = buf.readInt16BE(i * 2);\n    }\n    return regs;\n}\n\n// -------------------------------------------------------------------------\n// Handle manual \"Start\" trigger or emulator control strings\n// -------------------------------------------------------------------------\nif (msg.payload === \"Start\" || msg.payload === \"start\") {\n    flow.set(\"lcd_event_flag\", 2);\n    node.status({ fill: \"green\", shape: \"dot\", text: \"Flag set: 2 (Block 1)\" });\n    return null;\n}\n\n// Check if emulation is enabled (default disabled during normal operation with real LCD)\nif (flow.get(\"lcd_emulator_enabled\") !== true) {\n    return null;\n}\n\nlet buf = msg.payload;\nif (!Buffer.isBuffer(buf)) {\n    if (Array.isArray(buf)) {\n        buf = Buffer.from(buf);\n    } else {\n        return null;\n    }\n}\n\n// Modbus frame safety check: Must be at least 5 bytes and target Slave 1\nif (buf.length < 5 || buf[0] !== 1) {\n    return null;\n}\n\nconst fc = buf[1];\n\n// =========================================================================\n// 1. MASTER PERIODIC POLL: [01, 03, 0B, B9, 00, 15] (FC 03, Reg 3001, Qty 21)\n// =========================================================================\nif (fc === 3 && buf[2] === 11 && buf[3] === 185 && buf[4] === 0 && buf[5] === 21) {\n    const resp = Buffer.alloc(45);\n    resp[0] = 1;  // Slave 1\n    resp[1] = 3;  // FC 3\n    resp[2] = 42; // Byte Count: 42 (21 registers * 2)\n\n    // Flag: 0=idle, 2=Block 1 (1001), 8=Block 2 (1181)\n    const flag = flow.get(\"lcd_event_flag\") ?? 0;\n    resp.writeUInt16BE(flag, 23); // Register 3011 (bytes 23-24)\n\n    // Current Date/Time in Registers 3017-3021 (Big-Endian)\n    const now = new Date();\n    resp.writeUInt16BE(now.getFullYear() % 100, 35); // Reg 3017 (Year)\n    resp.writeUInt16BE(now.getMonth() + 1,      37); // Reg 3018 (Month)\n    resp.writeUInt16BE(now.getDate(),           39); // Reg 3019 (Day)\n    resp.writeUInt16BE(now.getHours(),          41); // Reg 3020 (Hour)\n    resp.writeUInt16BE(now.getMinutes(),        43); // Reg 3021 (Minute)\n\n    node.status({ fill: flag ? \"yellow\" : \"green\", shape: \"dot\", text: `Poll replied (Flag: ${flag})` });\n\n    const outMsg = { payload: resp };\n    return [outMsg, null]; // Output 1 -> modbus-crc16 -> delay -> serial out\n}\n\n// =========================================================================\n// 2a. MASTER READ SETTINGS: (FC 03, Qty 90 registers / 180 bytes)\n//    - Block 1 (Flag 2): Start Reg 1001 (0x03E9 -> buf[2]=3, buf[3]=233)\n//    - Block 2 (Flag 8): Start Reg 1181 (0x049D -> buf[2]=4, buf[3]=157)\n// =========================================================================\nif (fc === 3 && (buf.length >= 6) && (buf[4] === 0 && buf[5] === 90)) {\n    const startReg = buf.readUInt16BE(2);\n    const isBlock2 = (startReg === 1181) || (startReg !== 1001 && flow.get(\"lcd_event_flag\") === 8);\n\n    const targetStartReg = isBlock2 ? 1181 : 1001;\n    const baseBytes = isBlock2 ? BASE_CONFIG_BYTES_2 : BASE_CONFIG_BYTES_1;\n    const baseRegs = getBaseRegisters(baseBytes, targetStartReg);\n\n    const contextKey = isBlock2 ? \"lcd_config_registers_block2\" : \"lcd_config_registers_block1\";\n    let configRegs = flow.get(contextKey);\n    if (!configRegs) {\n        configRegs = baseRegs;\n        flow.set(contextKey, configRegs);\n    }\n\n    const resp = Buffer.alloc(183);\n    resp[0] = 1;   // Slave 1\n    resp[1] = 3;   // FC 3\n    resp[2] = 180; // Byte count: 180 (90 registers * 2)\n\n    for (let i = 0; i < 90; i++) {\n        const regNum = targetStartReg + i;\n        const val = (configRegs[regNum] !== undefined) ? configRegs[regNum] : (baseRegs[regNum] || 0);\n        resp.writeInt16BE(val, 3 + i * 2);\n    }\n\n    const blockName = isBlock2 ? \"Block 2 (Reg 1181-1270, Flag 8)\" : \"Block 1 (Reg 1001-1090, Flag 2)\";\n    node.status({ fill: \"blue\", shape: \"dot\", text: `Sent 90 regs: ${blockName}` });\n\n    const outMsg = { payload: resp };\n    const logMsg = {\n        payload: `Master read 90 config registers for ${blockName}`,\n        block: isBlock2 ? 2 : 1,\n        startRegister: targetStartReg,\n        flag: isBlock2 ? 8 : 2,\n        timestamp: new Date().toISOString(),\n        registers: configRegs\n    };\n\n    return [outMsg, logMsg];\n}\n\n// =========================================================================\n// 2b. MASTER WRITE SETTINGS: (FC 16, Qty 90 registers / 180 bytes)\n//    - Block 1 (Flag 2): Start Reg 1001 (0x03E9 -> buf[2]=3, buf[3]=233)\n//    - Block 2 (Flag 8): Start Reg 1181 (0x049D -> buf[2]=4, buf[3]=157)\n// =========================================================================\nif (fc === 16 && buf.length >= 187 && buf[6] === 180) {\n    let startReg = buf.readUInt16BE(2);\n    if (startReg !== 1001 && startReg !== 1181 && buf.length >= 27) {\n        const conf = buf.readUInt16BE(25);\n        if (conf === 1001 || conf === 1181) startReg = conf;\n    }\n\n    if (startReg === 1001 || startReg === 1181) {\n        const isBlock2 = (startReg === 1181);\n        const targetStartReg = isBlock2 ? 1181 : 1001;\n        const contextKey = isBlock2 ? \"lcd_config_registers_block2\" : \"lcd_config_registers_block1\";\n\n        let configRegs = flow.get(contextKey);\n        if (!configRegs) {\n            const baseBytes = isBlock2 ? BASE_CONFIG_BYTES_2 : BASE_CONFIG_BYTES_1;\n            configRegs = getBaseRegisters(baseBytes, targetStartReg);\n        }\n\n        for (let i = 0; i < 90; i++) {\n            configRegs[targetStartReg + i] = buf.readInt16BE(7 + i * 2);\n        }\n        flow.set(contextKey, configRegs);\n\n        const expectedFlag = isBlock2 ? 8 : 2;\n        if (flow.get(\"lcd_event_flag\") === expectedFlag) {\n            flow.set(\"lcd_event_flag\", 0);\n        }\n\n        const blockName = isBlock2 ? \"Block 2 (Reg 1181-1270, Flag 8)\" : \"Block 1 (Reg 1001-1090, Flag 2)\";\n        node.status({ fill: \"blue\", shape: \"dot\", text: `FC 16 wrote 90 regs: ${blockName}` });\n\n        // Standard Modbus FC 16 echo response: [1, 16, AddrHi, AddrLo, 0, 90] (CRC appended by modbus-crc16)\n        const resp = Buffer.from([1, 16, buf[2], buf[3], 0, 90]);\n\n        const outMsg = { payload: resp };\n        const logMsg = {\n            payload: `Master wrote 90 config registers for ${blockName} via FC 16`,\n            block: isBlock2 ? 2 : 1,\n            startRegister: targetStartReg,\n            flag: expectedFlag,\n            timestamp: new Date().toISOString(),\n            registers: configRegs\n        };\n\n        return [outMsg, logMsg];\n    }\n}\n\n// =========================================================================\n// 3. MASTER WRITE ACK: [01, 16, 0B, C3, 00, 01, 02, 00, 00] (FC 16, Reg 3011, Val 0)\n// =========================================================================\nif (fc === 16 && buf[2] === 11 && buf[3] === 195 && buf[4] === 0 && buf[5] === 1) {\n    const prevFlag = flow.get(\"lcd_event_flag\") ?? 0;\n    flow.set(\"lcd_event_flag\", 0);\n    node.status({ fill: \"green\", shape: \"ring\", text: `Ack received (was Flag ${prevFlag}) -> Reset to 0` });\n\n    // FC 16 echo response: [1, 16, 11, 195, 0, 1] (6 bytes, modbus-crc16 will append 243, 209)\n    const resp = Buffer.from([1, 16, 11, 195, 0, 1]);\n\n    const outMsg = { payload: resp };\n    const logMsg = {\n        payload: `Master write ack confirmed, Reg 3011 reset to 0 (cleared flag ${prevFlag})`,\n        event: \"write_ack_confirmed\",\n        timestamp: new Date().toISOString()\n    };\n\n    return [outMsg, logMsg];\n}\n\nreturn null;\n",
+        "func": "// =========================================================================\n// LCD EMULATOR (SLAVE 1 RESPONDER)\n// Supports 3 Configuration Blocks + Flag 128 (0x8000) Full Sync:\n// - Block 1: Reg 1001..1090 (3, 233) -> FLAG 2\n// - Block 2: Reg 1091..1180 (4, 67)  -> FLAG 4\n// - Block 3: Reg 1181..1270 (4, 157) -> FLAG 8\n// - Full Sync / Reboot: Reg 3011 = 0x8000 (byte 23 = 128) -> All 3 Blocks\n// =========================================================================\n\nconst BASE_CONFIG_BYTES_1 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,233,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,\n    0,0,0,0,0,0,0,1,0,5,0,1,0,5,0,30,0,80,0,17,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,50,0,20,0,20,255,56,4,76,1,94,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,32,1,44,0,30,0,110,2,38,1,44,1,24,0,200,0,\n    0,0,0,0,22,0,1,1,194,2,88,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0\n];\n\nconst BASE_CONFIG_BYTES_2 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,67,0,150,0,250,0,30,0,10,0,59,0,28,0,40,\n    255,106,0,1,0,0,0,70,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,1,0,40,0,5,0,5,1,94,0,0,0,0,0,0,0,100,1,224,0,40,1,224,0,60,0,24,0,5,0,\n    3,0,0,0,0,0,20,0,40,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,138,\n    0,5,0,1,0,30,0,0,0,0,0,0,0,1,0,30,0,3,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0\n];\n\nconst BASE_CONFIG_BYTES_3 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,157,1,244,0,220,0,200,0,30,0,30,1,144,\n    2,138,0,200,1,244,0,120,0,200,0,0,0,50,0,20,0,45,255,206,0,0,255,106,1,194,\n    2,38,2,38,1,194,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,16,0,1,0,20,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n];\n\nfunction getBaseRegisters(bytes, startReg) {\n    const regs = {};\n    const buf = Buffer.from(bytes);\n    for (let i = 0; i < 90; i++) {\n        regs[startReg + i] = buf.readInt16BE(i * 2);\n    }\n    return regs;\n}\n\n// -------------------------------------------------------------------------\n// Handle control commands (startup auto-trigger, manual read_all, start)\n// -------------------------------------------------------------------------\nif (typeof msg.payload === \"string\") {\n    const cmd = msg.payload.toLowerCase();\n    if (cmd === \"start_flag_128\" || cmd === \"read_all\" || cmd === \"flag_128\" || cmd === \"init\") {\n        flow.set(\"lcd_emulator_enabled\", true);\n        flow.set(\"lcd_event_flag\", 0x8000); // 32768 (byte 23 = 128, byte 24 = 0)\n        flow.set(\"lcd_config_initialized\", false);\n        flow.set(\"lcd_sync_status\", \"pending_flag_128\");\n        node.status({ fill: \"yellow\", shape: \"dot\", text: \"Startup: Flag 128 queued (Reading all registers)\" });\n        return null;\n    }\n    if (cmd === \"start\") {\n        if (flow.get(\"lcd_config_initialized\") !== true) {\n            node.warn(\"Cannot start: Configuration not yet initialized by Flag 128!\");\n            node.status({ fill: \"red\", shape: \"ring\", text: \"Blocked: waiting for Flag 128 read-out\" });\n            return null;\n        }\n        flow.set(\"lcd_event_flag\", 2);\n        node.status({ fill: \"green\", shape: \"dot\", text: \"Flag set: 2 (Block 1)\" });\n        return null;\n    }\n}\n\n// Emulation master switch (defaults to true if undefined)\nif (flow.get(\"lcd_emulator_enabled\") === false) {\n    return null;\n}\n\nlet buf = msg.payload;\nif (!Buffer.isBuffer(buf)) {\n    if (Array.isArray(buf)) {\n        buf = Buffer.from(buf);\n    } else {\n        return null;\n    }\n}\n\n// Modbus frame safety check: Must be at least 5 bytes and target Slave 1\nif (buf.length < 5 || buf[0] !== 1) {\n    return null;\n}\n\nconst fc = buf[1];\n\n// =========================================================================\n// 1. MASTER PERIODIC POLL: [01, 03, 0B, B9, 00, 15] (FC 03, Reg 3001, Qty 21)\n// =========================================================================\nif (fc === 3 && buf[2] === 11 && buf[3] === 185 && buf[4] === 0 && buf[5] === 21) {\n    const resp = Buffer.alloc(45);\n    resp[0] = 1;  // Slave 1\n    resp[1] = 3;  // FC 3\n    resp[2] = 42; // Byte Count: 42 (21 registers * 2)\n\n    // Flag: 0=idle, 2=Block 1 (1001), 4=Block 2 (1091), 8=Block 3 (1181), 0x8000 (32768)=Full Read-out\n    const flag = flow.get(\"lcd_event_flag\") ?? 0;\n    resp.writeUInt16BE(flag, 23); // Register 3011 (bytes 23-24)\n\n    // Current Date/Time in Registers 3017-3021 (Big-Endian)\n    const now = new Date();\n    resp.writeUInt16BE(now.getFullYear() % 100, 35); // Reg 3017 (Year)\n    resp.writeUInt16BE(now.getMonth() + 1,      37); // Reg 3018 (Month)\n    resp.writeUInt16BE(now.getDate(),           39); // Reg 3019 (Day)\n    resp.writeUInt16BE(now.getHours(),          41); // Reg 3020 (Hour)\n    resp.writeUInt16BE(now.getMinutes(),        43); // Reg 3021 (Minute)\n\n    if (flag === 0x8000 || flag === 32768) {\n        node.status({ fill: \"yellow\", shape: \"dot\", text: \"Poll replied: Flag 128 (Reading all registers)\" });\n    } else if (flag > 0) {\n        node.status({ fill: \"yellow\", shape: \"dot\", text: `Poll replied (Flag: ${flag})` });\n    } else {\n        node.status({ fill: \"green\", shape: \"dot\", text: \"Poll replied (Idle, Flag 0)\" });\n    }\n\n    const outMsg = { payload: resp };\n    return [outMsg, null]; // Output 1 -> calculate crc -> delay -> serial out\n}\n\n// =========================================================================\n// 2a. MASTER READ SETTINGS: (FC 03, Qty 90 registers / 180 bytes)\n//    - Block 1 (Flag 2): Start Reg 1001 (0x03E9 -> buf[2]=3, buf[3]=233)\n//    - Block 2 (Flag 4): Start Reg 1091 (0x0443 -> buf[2]=4, buf[3]=67)\n//    - Block 3 (Flag 8): Start Reg 1181 (0x049D -> buf[2]=4, buf[3]=157)\n// =========================================================================\nif (fc === 3 && (buf.length >= 6) && (buf[4] === 0 && buf[5] === 90)) {\n    const startReg = buf.readUInt16BE(2);\n    let blockNum = 1;\n    let targetStartReg = 1001;\n\n    if (startReg === 1091 || (startReg !== 1001 && startReg !== 1181 && flow.get(\"lcd_event_flag\") === 4)) {\n        blockNum = 2;\n        targetStartReg = 1091;\n    } else if (startReg === 1181 || (startReg !== 1001 && flow.get(\"lcd_event_flag\") === 8)) {\n        blockNum = 3;\n        targetStartReg = 1181;\n    } else {\n        blockNum = 1;\n        targetStartReg = 1001;\n    }\n\n    const contextKey = \"lcd_config_registers_block\" + blockNum;\n    let configRegs = flow.get(contextKey);\n    if (!configRegs) {\n        const baseBytes = (blockNum === 1) ? BASE_CONFIG_BYTES_1 : ((blockNum === 2) ? BASE_CONFIG_BYTES_2 : BASE_CONFIG_BYTES_3);\n        configRegs = getBaseRegisters(baseBytes, targetStartReg);\n        flow.set(contextKey, configRegs);\n    }\n\n    const resp = Buffer.alloc(183);\n    resp[0] = 1;   // Slave 1\n    resp[1] = 3;   // FC 3\n    resp[2] = 180; // Byte count: 180 (90 registers * 2)\n\n    for (let i = 0; i < 90; i++) {\n        const regNum = targetStartReg + i;\n        const val = (configRegs[regNum] !== undefined) ? configRegs[regNum] : 0;\n        resp.writeInt16BE(val, 3 + i * 2);\n    }\n\n    const flagNum = (blockNum === 1) ? 2 : ((blockNum === 2) ? 4 : 8);\n    const blockName = `Block ${blockNum} (Reg ${targetStartReg}-${targetStartReg + 89}, Flag ${flagNum})`;\n    node.status({ fill: \"blue\", shape: \"dot\", text: `Sent 90 regs: ${blockName}` });\n\n    const outMsg = { payload: resp };\n    const logMsg = {\n        payload: `Master read 90 config registers for ${blockName}`,\n        block: blockNum,\n        startRegister: targetStartReg,\n        flag: flagNum,\n        timestamp: new Date().toISOString(),\n        registers: configRegs\n    };\n\n    return [outMsg, logMsg];\n}\n\n// =========================================================================\n// 2b. MASTER WRITE SETTINGS: (FC 16, Qty 90 registers / 180 bytes)\n//    - Block 1 (Flag 2): Start Reg 1001 (0x03E9 -> buf[2]=3, buf[3]=233)\n//    - Block 2 (Flag 4): Start Reg 1091 (0x0443 -> buf[2]=4, buf[3]=67)\n//    - Block 3 (Flag 8): Start Reg 1181 (0x049D -> buf[2]=4, buf[3]=157)\n// =========================================================================\nif (fc === 16 && buf.length >= 187 && buf[6] === 180) {\n    let startReg = buf.readUInt16BE(2);\n    if (startReg !== 1001 && startReg !== 1091 && startReg !== 1181 && buf.length >= 27) {\n        const conf = buf.readUInt16BE(25);\n        if (conf === 1001 || conf === 1091 || conf === 1181) startReg = conf;\n    }\n\n    if (startReg === 1001 || startReg === 1091 || startReg === 1181) {\n        const blockNum = (startReg === 1001) ? 1 : ((startReg === 1091) ? 2 : 3);\n        const targetStartReg = startReg;\n        const contextKey = \"lcd_config_registers_block\" + blockNum;\n\n        let configRegs = flow.get(contextKey) || {};\n        for (let i = 0; i < 90; i++) {\n            configRegs[targetStartReg + i] = buf.readInt16BE(7 + i * 2);\n        }\n        flow.set(contextKey, configRegs);\n\n        // Track synced blocks during Flag 128\n        let synced = flow.get(\"lcd_synced_blocks\") || {};\n        synced[startReg] = true;\n        flow.set(\"lcd_synced_blocks\", synced);\n\n        // If single block update was pending, clear flag\n        const expectedFlag = (blockNum === 1) ? 2 : ((blockNum === 2) ? 4 : 8);\n        if (flow.get(\"lcd_event_flag\") === expectedFlag) {\n            flow.set(\"lcd_event_flag\", 0);\n        }\n\n        const blockName = `Block ${blockNum} (Reg ${targetStartReg}-${targetStartReg + 89})`;\n        node.status({ fill: \"blue\", shape: \"dot\", text: `FC 16 stored 90 regs: ${blockName}` });\n\n        // Modbus FC 16 confirmation: [1, 16, AddrHi, AddrLo, 0, 90] (CRC appended by calculate crc)\n        const resp = Buffer.from([1, 16, buf[2], buf[3], 0, 90]);\n\n        const outMsg = { payload: resp };\n        const logMsg = {\n            payload: `Master wrote 90 config registers for ${blockName} via FC 16`,\n            block: blockNum,\n            startRegister: targetStartReg,\n            timestamp: new Date().toISOString(),\n            registers: configRegs\n        };\n\n        return [outMsg, logMsg];\n    }\n}\n\n// =========================================================================\n// 3. MASTER WRITE ACK: [01, 16, 0B, C3, 00, 01, 02, 00, 00] (FC 16, Reg 3011, Val 0)\n// =========================================================================\nif (fc === 16 && buf[2] === 11 && buf[3] === 195 && buf[4] === 0 && buf[5] === 1) {\n    const prevFlag = flow.get(\"lcd_event_flag\") ?? 0;\n    flow.set(\"lcd_event_flag\", 0);\n\n    // If we were executing Flag 128 / 0x8000 full read-out, mark initialized!\n    if (prevFlag === 0x8000 || prevFlag === 32768 || prevFlag === 128) {\n        flow.set(\"lcd_config_initialized\", true);\n        flow.set(\"lcd_sync_status\", \"initialized\");\n        node.status({ fill: \"green\", shape: \"dot\", text: \"Flag 128 sync complete: All registers in memory\" });\n    } else {\n        node.status({ fill: \"green\", shape: \"ring\", text: `Ack received (was Flag ${prevFlag}) -> Reset to 0` });\n    }\n\n    // FC 16 echo response: [1, 16, 11, 195, 0, 1] (CRC appended by calculate crc)\n    const resp = Buffer.from([1, 16, 11, 195, 0, 1]);\n\n    const outMsg = { payload: resp };\n    const logMsg = {\n        payload: `Master write ack confirmed, Reg 3011 reset to 0 (cleared flag ${prevFlag})`,\n        event: \"write_ack_confirmed\",\n        config_initialized: flow.get(\"lcd_config_initialized\"),\n        timestamp: new Date().toISOString()\n    };\n\n    return [outMsg, logMsg];\n}\n\nreturn null;",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1740,
-        "y": 960,
+        "x": 1680,
+        "y": 980,
         "wires": [
             [
-                "dc82cae3fe2c3a01"
+                "dc82cae3fe2c3a01",
+                "c8871d435b1846bc"
             ],
             [
-                "debug_lcd_events_01"
+                "debug_lcd_events_01",
+                "func_publish_ha_config_01"
             ]
         ]
     },
@@ -158,8 +159,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 2280,
-        "y": 920,
+        "x": 2220,
+        "y": 940,
         "wires": []
     },
     {
@@ -177,23 +178,30 @@
         "retentionPolicyV18Flux": "",
         "org": "Kadlec",
         "bucket": "HeatPump",
-        "x": 1200,
-        "y": 200,
+        "x": 1140,
+        "y": 220,
         "wires": []
     },
     {
         "id": "dc82cae3fe2c3a01",
-        "type": "modbus-crc16",
+        "type": "function",
         "z": "1c00011a6f22edfe",
-        "name": "",
-        "x": 2000,
-        "y": 960,
+        "name": "calculate crc",
+        "x": 1960,
+        "y": 980,
         "wires": [
             [
                 "bc5f22420e490a06",
                 "1e6bf5b4c1e41252"
             ]
-        ]
+        ],
+        "func": "// 1. Normalize input: Ensure Buffer\nlet buffer = msg.payload;\nif (Array.isArray(buffer)) {\n    buffer = Buffer.from(buffer);\n} else if (!Buffer.isBuffer(buffer)) {\n    node.error(\"Payload is not a valid buffer or byte array\", msg);\n    return null;\n}\n\nif (buffer.length === 0) {\n    node.warn(\"Payload is empty\");\n    return null;\n}\n\n// 2. Calculate Modbus RTU CRC16 (poly 0xA001, init 0xFFFF)\nlet crc = 0xFFFF;\nfor (let pos = 0; pos < buffer.length; pos++) {\n    crc ^= buffer[pos];\n    for (let i = 8; i !== 0; i--) {\n        if ((crc & 0x0001) !== 0) {\n            crc = (crc >> 1) ^ 0xA001;\n        } else {\n            crc >>= 1;\n        }\n    }\n}\n\n// 3. Extract low and high bytes (Modbus transmits Low Byte first, then High Byte)\nconst low = crc & 0xFF;\nconst high = (crc >> 8) & 0xFF;\n\n// 4. Append 2 CRC bytes to payload buffer\nconst crcBuffer = Buffer.from([low, high]);\nmsg.payload = Buffer.concat([buffer, crcBuffer]);\n\n// Optional metadata\nmsg.crc = crc;\nmsg.crc_bytes = [low, high];\n\n// Update node status display\nconst hexL = low.toString(16).padStart(2, \"0\").toUpperCase();\nconst hexH = high.toString(16).padStart(2, \"0\").toUpperCase();\nnode.status({ fill: \"green\", shape: \"dot\", text: `${msg.payload.length}B (CRC: ${hexL} ${hexH})` });\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": []
     },
     {
         "id": "b9266b0544516dfa",
@@ -207,8 +215,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 400,
-        "y": 240,
+        "x": 340,
+        "y": 260,
         "wires": [
             [
                 "7fce707f5340093f",
@@ -246,8 +254,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 660,
-        "y": 240,
+        "x": 600,
+        "y": 260,
         "wires": []
     },
     {
@@ -262,8 +270,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 800,
-        "y": 300,
+        "x": 740,
+        "y": 320,
         "wires": [
             [
                 "abc4eedfe248121f",
@@ -283,8 +291,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1020,
-        "y": 280,
+        "x": 960,
+        "y": 300,
         "wires": []
     },
     {
@@ -292,15 +300,15 @@
         "type": "function",
         "z": "1c00011a6f22edfe",
         "name": "Create HA mqtt device",
-        "func": "// --- Configuration ---\nconst baseTopic = \"nodered/heatpump\";\nconst discoveryPrefix = \"homeassistant\";\nconst deviceName = \"Heat Pump\"; \nconst deviceIdentifier = \"nodered_heatpump_001\"; \nconst stateTopic = `${baseTopic}/${deviceIdentifier}/state`;\n\n// Map: JSON Key -> HA Configuration\nconst sensorMap = {\n    // --- Analog Sensors (Numbers) ---\n    \"Teplota vstup\": { unit: \"°C\", devClass: \"temperature\", name: \"Inlet Temp\", icon: \"mdi:thermometer-chevron-down\" },\n    \"Teplota vystup\": { unit: \"°C\", devClass: \"temperature\", name: \"Outlet Temp\", icon: \"mdi:thermometer-chevron-up\" },\n    \"Teplota vytlak\": { unit: \"°C\", devClass: \"temperature\", name: \"Discharge Temp\", icon: \"mdi:thermometer-alert\" },\n    \"Teplota bojler\": { unit: \"°C\", devClass: \"temperature\", name: \"Boiler Temp\", icon: \"mdi:water-boiler\" },\n    \"Teplota sani\": { unit: \"°C\", devClass: \"temperature\", name: \"Suction Temp\", icon: \"mdi:thermometer-low\" },\n    \"Teplota vyparnik\": { unit: \"°C\", devClass: \"temperature\", name: \"Evaporator Temp\", icon: \"mdi:snowflake-thermometer\" },\n    \"Teplota okoli\": { unit: \"°C\", devClass: \"temperature\", name: \"Ambient Temp\", icon: \"mdi:thermometer\" },\n    \"Teplota invertoru\": { unit: \"°C\", devClass: \"temperature\", name: \"Inverter Temp\", icon: \"mdi:chip\" },\n    \"Hodnota ochrane teploty modulu\": { unit: \"°C\", devClass: \"temperature\", name: \"Module Prot. Temp\", icon: \"mdi:shield-alert\" },\n    \"Prehrati sani\": { unit: \"°C\", devClass: \"temperature\", name: \"Superheat Suction\", icon: \"mdi:thermometer-lines\" },\n    \"Prehrati vytlak\": { unit: \"°C\", devClass: \"temperature\", name: \"Superheat Discharge\", icon: \"mdi:thermometer-lines\" },\n    \n    \"Tlak sani\": { unit: \"bar\", devClass: \"pressure\", name: \"Suction Pressure\", icon: \"mdi:gauge-low\" },\n    \"Tlak vytlak\": { unit: \"bar\", devClass: \"pressure\", name: \"Discharge Pressure\", icon: \"mdi:gauge\" },\n    \n    \"Frekvence nastavena\": { unit: \"Hz\", devClass: \"frequency\", name: \"Freq Set\", icon: \"mdi:sine-wave\" },\n    \"Frekvence skutecna\": { unit: \"Hz\", devClass: \"frequency\", name: \"Freq Actual\", icon: \"mdi:sine-wave\" },\n    \n    \"Ventilator rychlost\": { unit: \"rpm\", icon: \"mdi:fan\", name: \"Fan Speed\" },\n    \"Ventilator nastavena rychlost\": { unit: \"rpm\", icon: \"mdi:fan\", name: \"Fan Speed Set\" },\n    \n    \"AC vstupni napeti\": { unit: \"V\", devClass: \"voltage\", name: \"AC Input Volt\", icon: \"mdi:lightning-bolt\" },\n    \"Napeti sbernice\": { unit: \"V\", devClass: \"voltage\", name: \"Bus Volt\", icon: \"mdi:flash\" },\n    \n    \"AC vstupni proud\": { unit: \"A\", devClass: \"current\", name: \"AC Input Curr\", icon: \"mdi:current-ac\" },\n    \"Fazovy proud kompresoru\": { unit: \"A\", devClass: \"current\", name: \"Compressor Curr\", icon: \"mdi:current-ac\" },\n    \n    \n\n    // --- Digital Sensors (Switches) ---\n    // component: \"binary_sensor\" tells the loop to format this as a switch (On/Off)\n    \"Compressor (O01)\": { component: \"binary_sensor\", name: \"Status Compressor\", icon: \"mdi:air-conditioner\" },\n    \"Water Pump (O02)\": { component: \"binary_sensor\", name: \"Status Water Pump\", icon: \"mdi:water-pump\" },\n    \"4-way Valve (O03)\": { component: \"binary_sensor\", name: \"Status 4-way Valve\", icon: \"mdi:valve\" },\n    \"Fan Motor (O04)\": { component: \"binary_sensor\", name: \"Status Fan Motor\", icon: \"mdi:fan\" },\n    \"Antifreeze Heating Strip (O06)\": { component: \"binary_sensor\", name: \"Status Antifreeze Heat\", icon: \"mdi:heating-coil\" },\n    \"Crank Antifreeze Heating Strip (O07)\": { component: \"binary_sensor\", name: \"Status Crank Heat\", icon: \"mdi:heating-coil\" },\n    \"Spray Valve (O08)\": { component: \"binary_sensor\", name: \"Status Spray Valve\", icon: \"mdi:spray\" },\n    \"Auxiliary Electric Heater (O09)\": { component: \"binary_sensor\", name: \"Status Aux Heater\", icon: \"mdi:patio-heater\" },\n    \"Alarm (O11)\": { component: \"binary_sensor\", devClass: \"problem\", name: \"Status Alarm\", icon: \"mdi:alert-circle\" },\n    \"Hot Water Pump (O12)\": { component: \"binary_sensor\", name: \"Status Hot Water Pump\", icon: \"mdi:water-pump\" },\n    \"3-way Valve (O13)\": { component: \"binary_sensor\", name: \"Status 3-way Valve\", icon: \"mdi:valve\" },\n    \"EVV\": { icon: \"mdi:pipe-valve\", name: \"Exp Valve\" },\n\n    \"ON/OFF\": { name: \"ON/OFF\", icon: \"mdi:ower\" },\n};\n\n// --- Logic ---\nvar configMessages = [];\n\nfor (const [jsonKey, config] of Object.entries(sensorMap)) {\n    // 1. Determine Component Type (sensor vs binary_sensor)\n    let component = config.component || \"sensor\"; \n\n    // 2. Create a safe unique ID\n    // Removes spaces, parenthesis, and special chars for the ID\n    let safeId = jsonKey.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_'); \n    let uniqueId = `${deviceIdentifier}_${safeId}`;\n    \n    // 3. Create a clean Object ID for entity registry\n    // e.g., hp_inlet_temp or hp_status_compressor\n    let objectId = `hp_${config.name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_')}`;\n\n    // 4. Set Discovery Topic based on component type\n    let configTopic = `${discoveryPrefix}/${component}/${uniqueId}/config`;\n\n    // 5. Build Base Payload\n    let payload = {\n        \"name\": config.name,\n        \"unique_id\": uniqueId,\n        \"object_id\": objectId,\n        \"state_topic\": stateTopic,\n        \"value_template\": `{{ value_json['${jsonKey}'] }}`,\n        \"device\": {\n            \"identifiers\": [deviceIdentifier],\n            \"name\": deviceName,\n            \"model\": \"Heat Pump Controller\",\n            \"manufacturer\": \"Node-RED\"\n        }\n    };\n\n    // 6. Add component-specific details\n    if (component === \"binary_sensor\") {\n        // Binary sensors handle True/False values\n        // We strictly define what the JSON payload looks like for On/Off\n        payload.payload_on = true;\n        payload.payload_off = false;\n        \n        if (config.devClass) payload.device_class = config.devClass;\n        if (config.icon) payload.icon = config.icon;\n        \n    } else {\n        // Standard numeric sensors\n        payload.state_class = \"measurement\";\n        if (config.unit) payload.unit_of_measurement = config.unit;\n        if (config.devClass) payload.device_class = config.devClass;\n        if (config.icon) payload.icon = config.icon;\n    }\n\n    configMessages.push({\n        topic: configTopic,\n        payload: JSON.stringify(payload),\n        retain: true\n    });\n}\n\nreturn [configMessages];",
+        "func": "// --- Configuration ---\nconst baseTopic = \"nodered/heatpump\";\nconst discoveryPrefix = \"homeassistant\";\nconst deviceName = \"Heat Pump\"; \nconst deviceIdentifier = \"nodered_heatpump_001\"; \nconst stateTopic = `${baseTopic}/${deviceIdentifier}/state`;\nconst configStateTopic = `${baseTopic}/${deviceIdentifier}/config_state`;\n\n// Map: JSON Key -> HA Configuration (Telemetry Sensors)\nconst sensorMap = {\n    // --- Analog Sensors (Numbers) ---\n    \"Teplota vstup\": { unit: \"°C\", devClass: \"temperature\", name: \"Inlet Temp\", icon: \"mdi:thermometer-chevron-down\" },\n    \"Teplota vystup\": { unit: \"°C\", devClass: \"temperature\", name: \"Outlet Temp\", icon: \"mdi:thermometer-chevron-up\" },\n    \"Teplota vytlak\": { unit: \"°C\", devClass: \"temperature\", name: \"Discharge Temp\", icon: \"mdi:thermometer-alert\" },\n    \"Teplota bojler\": { unit: \"°C\", devClass: \"temperature\", name: \"Boiler Temp\", icon: \"mdi:water-boiler\" },\n    \"Teplota sani\": { unit: \"°C\", devClass: \"temperature\", name: \"Suction Temp\", icon: \"mdi:thermometer-low\" },\n    \"Teplota vyparnik\": { unit: \"°C\", devClass: \"temperature\", name: \"Evaporator Temp\", icon: \"mdi:snowflake-thermometer\" },\n    \"Teplota okoli\": { unit: \"°C\", devClass: \"temperature\", name: \"Ambient Temp\", icon: \"mdi:thermometer\" },\n    \"Teplota invertoru\": { unit: \"°C\", devClass: \"temperature\", name: \"Inverter Temp\", icon: \"mdi:chip\" },\n    \"Hodnota ochrane teploty modulu\": { unit: \"°C\", devClass: \"temperature\", name: \"Module Prot. Temp\", icon: \"mdi:shield-alert\" },\n    \"Prehrati sani\": { unit: \"°C\", devClass: \"temperature\", name: \"Superheat Suction\", icon: \"mdi:thermometer-lines\" },\n    \"Prehrati vytlak\": { unit: \"°C\", devClass: \"temperature\", name: \"Superheat Discharge\", icon: \"mdi:thermometer-lines\" },\n    \n    \"Tlak sani\": { unit: \"bar\", devClass: \"pressure\", name: \"Suction Pressure\", icon: \"mdi:gauge-low\" },\n    \"Tlak vytlak\": { unit: \"bar\", devClass: \"pressure\", name: \"Discharge Pressure\", icon: \"mdi:gauge\" },\n    \n    \"Frekvence nastavena\": { unit: \"Hz\", devClass: \"frequency\", name: \"Freq Set\", icon: \"mdi:sine-wave\" },\n    \"Frekvence skutecna\": { unit: \"Hz\", devClass: \"frequency\", name: \"Freq Actual\", icon: \"mdi:sine-wave\" },\n    \n    \"Ventilator rychlost\": { unit: \"rpm\", icon: \"mdi:fan\", name: \"Fan Speed\" },\n    \"Ventilator nastavena rychlost\": { unit: \"rpm\", icon: \"mdi:fan\", name: \"Fan Speed Set\" },\n    \n    \"AC vstupni napeti\": { unit: \"V\", devClass: \"voltage\", name: \"AC Input Volt\", icon: \"mdi:lightning-bolt\" },\n    \"Napeti sbernice\": { unit: \"V\", devClass: \"voltage\", name: \"Bus Volt\", icon: \"mdi:flash\" },\n    \n    \"AC vstupni proud\": { unit: \"A\", devClass: \"current\", name: \"AC Input Curr\", icon: \"mdi:current-ac\" },\n    \"Fazovy proud kompresoru\": { unit: \"A\", devClass: \"current\", name: \"Compressor Curr\", icon: \"mdi:current-ac\" },\n    \n    // --- Digital Sensors (Switches) ---\n    \"Compressor (O01)\": { component: \"binary_sensor\", name: \"Status Compressor\", icon: \"mdi:air-conditioner\" },\n    \"Water Pump (O02)\": { component: \"binary_sensor\", name: \"Status Water Pump\", icon: \"mdi:water-pump\" },\n    \"4-way Valve (O03)\": { component: \"binary_sensor\", name: \"Status 4-way Valve\", icon: \"mdi:valve\" },\n    \"Fan Motor (O04)\": { component: \"binary_sensor\", name: \"Status Fan Motor\", icon: \"mdi:fan\" },\n    \"Antifreeze Heating Strip (O06)\": { component: \"binary_sensor\", name: \"Status Antifreeze Heat\", icon: \"mdi:heating-coil\" },\n    \"Crank Antifreeze Heating Strip (O07)\": { component: \"binary_sensor\", name: \"Status Crank Heat\", icon: \"mdi:heating-coil\" },\n    \"Spray Valve (O08)\": { component: \"binary_sensor\", name: \"Status Spray Valve\", icon: \"mdi:spray\" },\n    \"Auxiliary Electric Heater (O09)\": { component: \"binary_sensor\", name: \"Status Aux Heater\", icon: \"mdi:patio-heater\" },\n    \"Alarm (O11)\": { component: \"binary_sensor\", devClass: \"problem\", entityCategory: \"diagnostic\", name: \"Status Alarm\", icon: \"mdi:alert-circle\" },\n    \"Hot Water Pump (O12)\": { component: \"binary_sensor\", name: \"Status Hot Water Pump\", icon: \"mdi:water-pump\" },\n    \"3-way Valve (O13)\": { component: \"binary_sensor\", name: \"Status 3-way Valve\", icon: \"mdi:valve\" },\n    \"EVV\": { icon: \"mdi:pipe-valve\", name: \"Exp Valve\" },\n\n    \"ON/OFF\": { name: \"ON/OFF\", icon: \"mdi:power\" },\n\n    // --- Diagnostic Alarms & Safety Switches (Register 2085 Low Byte) ---\n    \"High Pressure Alarm (S01)\": { component: \"binary_sensor\", devClass: \"problem\", entityCategory: \"diagnostic\", name: \"High Pressure Alarm (S01)\", icon: \"mdi:gauge-full\" },\n    \"Low Pressure Alarm (S02)\": { component: \"binary_sensor\", devClass: \"problem\", entityCategory: \"diagnostic\", name: \"Low Pressure Alarm (S02)\", icon: \"mdi:gauge-empty\" },\n    \"Water Flow Alarm (S03)\": { component: \"binary_sensor\", devClass: \"problem\", entityCategory: \"diagnostic\", name: \"Water Flow Alarm (S03)\", icon: \"mdi:water-alert\" },\n    \"Emergency Switch Alarm (S04)\": { component: \"binary_sensor\", devClass: \"problem\", entityCategory: \"diagnostic\", name: \"Emergency Switch Alarm (S04)\", icon: \"mdi:alert-octagon\" },\n    \"Mode Switch (S05)\": { component: \"binary_sensor\", name: \"Status Mode Switch (S05)\", icon: \"mdi:toggle-switch\" },\n    \"Heater Overload Alarm (S07)\": { component: \"binary_sensor\", devClass: \"problem\", entityCategory: \"diagnostic\", name: \"Heater Overload Alarm (S07)\", icon: \"mdi:heat-wave\" },\n\n    // --- Diagnostic Alarm Detail Code (Register 2085 High Byte) ---\n    \"Alarm detail\": { entityCategory: \"diagnostic\", name: \"Alarm Detail\", icon: \"mdi:alert-circle-outline\" }\n};\n\n// =========================================================================\n// Complete Heat Pump Configuration Registers (109 Parameters)\n// - First 21 entries: Primary Controls (Home Assistant \"Controls\" section)\n// - Remaining 88 entries: System Configuration (Home Assistant \"Configuration\" section)\n// =========================================================================\nconst configRegisterList = [\n    {\n        \"reg\": 1011,\n        \"key\": \"power_state\",\n        \"name\": \"Power State\",\n        \"component\": \"switch\",\n        \"icon\": \"mdi:power\",\n        \"block\": 1\n    },\n    {\n        \"reg\": 1012,\n        \"key\": \"operating_mode\",\n        \"name\": \"Operating Mode\",\n        \"component\": \"select\",\n        \"options\": [\n            \"Hot Water\",\n            \"Heating\",\n            \"Cooling\",\n            \"Hot Water + Heating\",\n            \"Hot Water + Cooling\"\n        ],\n        \"icon\": \"mdi:hvac\",\n        \"block\": 1\n    },\n    {\n        \"reg\": 1192,\n        \"key\": \"heating_target_temp\",\n        \"name\": \"Heating Setpoint\",\n        \"component\": \"number\",\n        \"devClass\": \"temperature\",\n        \"unit\": \"°C\",\n        \"scale\": 0.1,\n        \"min\": 20.0,\n        \"max\": 50.0,\n        \"step\": 0.5,\n        \"mode\": \"box\",\n        \"icon\": \"mdi:radiator\",\n        \"block\": 3\n    },\n    {\n        \"reg\": 1191,\n        \"key\": \"boiler_target_temp\",\n        \"name\": \"Hot Water Setpoint\",\n        \"component\": \"number\",\n        \"devClass\": \"temperature\",\n        \"unit\": \"°C\",\n        \"scale\": 0.1,\n        \"min\": 40.0,\n        \"max\": 65.0,\n        \"step\": 0.5,\n        \"mode\": \"box\",\n        \"icon\": \"mdi:water-boiler\",\n        \"block\": 3\n    },\n    {\n        \"reg\": 1193,\n        \"key\": \"cooling_target_temp\",\n        \"name\": \"Cooling Setpoint\",\n        \"component\": \"number\",\n        \"devClass\": \"temperature\",\n        \"unit\": \"°C\",\n        \"scale\": 0.1,\n        \"min\": 12.0,\n        \"max\": 20.0,\n        \"step\": 0.5,\n        \"mode\": \"box\",\n        \"icon\": \"mdi:snowflake\",\n        \"block\": 3\n    },\n    {\n        \"reg\": 1255,\n        \"key\": \"timer_1_enable\",\n        \"name\": \"Timer 1 (ON) Enable\",\n        \"component\": \"switch\",\n        \"icon\": \"mdi:timer-play\",\n        \"block\": 3\n    },\n    {\n        \"reg\": 1256,\n        \"key\": \"timer_1_hour\",\n        \"name\": \"Timer 1 (ON) Hour\",\n        \"component\": \"number\",\n        \"unit\": \"h\",\n        \"min\": 0,\n        \"max\": 23,\n        \"step\": 1,\n        \"mode\": \"box\",\n        \"icon\": \"mdi:clock-outline\",\n        \"block\": 3\n    },\n    {\n        \"reg\": 1259,\n        \"key\": \"timer_1_minute\",\n        \"name\": \"Timer 1 (ON) Minute\",\n        \"component\": \"number\",\n        \"unit\": \"min\",\n        \"min\": 0,\n        \"max\": 59,\n        \"step\": 1,\n        \"mode\": \"box\",\n        \"icon\": \"mdi:clock-outline\",\n        \"block\": 3\n    },\n    {\n        \"reg\": 1257,\n        \"key\": \"timer_2_enable\",\n        \"name\": \"Timer 2 (OFF) Enable\",\n        \"component\": \"switch\",\n        \"icon\": \"mdi:timer-stop\",\n        \"block\": 3\n    },\n    {\n        \"reg\": 1258,\n        \"key\": \"timer_2_hour\",\n        \"name\": \"Timer 2 (OFF) Hour\",\n        \"component\": \"number\",\n        \"unit\": \"h\",\n        \"min\": 0,\n        \"max\": 23,\n        \"step\": 1,\n        \"mode\": \"box\",\n        \"icon\": \"mdi:clock-outline\",\n        \"block\": 3\n    },\n    {\n        \"reg\": 1260,\n        \"key\": \"timer_2_minute\",\n        \"name\": \"Timer 2 (OFF) Minute\",\n        \"component\": \"number\",\n        \"unit\": \"min\",\n        \"min\": 0,\n        \"max\": 59,\n        \"step\": 1,\n        \"mode\": \"box\",\n        \"icon\": \"mdi:clock-outline\",\n        \"block\": 3\n    },\n    {\n        \"reg\": 1074,\n        \"key\": \"fast_mute\",\n        \"name\": \"Fast Mute\",\n        \"component\": \"switch\",\n        \"icon\": \"mdi:volume-mute\",\n        \"block\": 1\n    },\n    {\n        \"reg\": 1068,\n        \"key\": \"mute_timer_enable\",\n        \"name\": \"Mute Timer Enable\",\n        \"component\": \"switch\",\n        \"icon\": \"mdi:timer-cog\",\n        \"block\": 1\n    },\n    {\n        \"reg\": 1069,\n        \"key\": \"mute_start_hour\",\n        \"name\": \"Mute Timer Start Hour\",\n        \"component\": \"number\",\n        \"unit\": \"h\",\n        \"min\": 0,\n        \"max\": 23,\n        \"step\": 1,\n        \"mode\": \"box\",\n        \"icon\": \"mdi:clock-start\",\n        \"block\": 1\n    },\n    {\n        \"reg\": 1261,\n        \"key\": \"mute_start_minute\",\n        \"name\": \"Mute Timer Start Min\",\n        \"component\": \"number\",\n        \"unit\": \"min\",\n        \"min\": 0,\n        \"max\": 59,\n        \"step\": 1,\n        \"mode\": \"box\",\n        \"icon\": \"mdi:clock-start\",\n        \"block\": 3\n    },\n    {\n        \"reg\": 1070,\n        \"key\": \"mute_end_hour\",\n        \"name\": \"Mute Timer End Hour\",\n        \"component\": \"number\",\n        \"unit\": \"h\",\n        \"min\": 0,\n        \"max\": 23,\n        \"step\": 1,\n        \"mode\": \"box\",\n        \"icon\": \"mdi:clock-end\",\n        \"block\": 1\n    },\n    {\n        \"reg\": 1262,\n        \"key\": \"mute_end_minute\",\n        \"name\": \"Mute Timer End Min\",\n        \"component\": \"number\",\n        \"unit\": \"min\",\n        \"min\": 0,\n        \"max\": 59,\n        \"step\": 1,\n        \"mode\": \"box\",\n        \"icon\": \"mdi:clock-end\",\n        \"block\": 3\n    },\n    {\n        \"reg\": 1031,\n        \"key\": \"electric_heater\",\n        \"name\": \"Electric Heater\",\n        \"component\": \"switch\",\n        \"icon\": \"mdi:patio-heater\",\n        \"block\": 1\n    },\n    {\n        \"reg\": 1167,\n        \"key\": \"pump_running_mode\",\n        \"name\": \"Pump Running Mode\",\n        \"component\": \"select\",\n        \"options\": [\n            \"Ordinary\",\n            \"Special\",\n            \"Interval\"\n        ],\n        \"icon\": \"mdi:water-pump\",\n        \"block\": 2\n    },\n    {\n        \"reg\": 1168,\n        \"key\": \"pump_running_interval\",\n        \"name\": \"Pump Running Interval\",\n        \"component\": \"number\",\n        \"unit\": \"min\",\n        \"min\": 0,\n        \"max\": 120,\n        \"step\": 1,\n        \"mode\": \"slider\",\n        \"icon\": \"mdi:timer-sand\",\n        \"block\": 2\n    },\n    {\n        \"reg\": 1169,\n        \"key\": \"pump_running_duration\",\n        \"name\": \"Pump Running Duration\",\n        \"component\": \"number\",\n        \"unit\": \"min\",\n        \"min\": 0,\n        \"max\": 30,\n        \"step\": 1,\n        \"mode\": \"slider\",\n        \"icon\": \"mdi:timer-outline\",\n        \"block\": 2\n    },\n    {\n        \"reg\": 1018,\n        \"key\": \"auto_start\",\n        \"name\": \"Auto start\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"switch\",\n        \"icon\": \"mdi:toggle-switch\"\n    },\n    {\n        \"reg\": 1019,\n        \"key\": \"master_slave_unit\",\n        \"name\": \"Master/Slave Unit\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"select\",\n        \"options\": [\n            \"Master\",\n            \"Slave\"\n        ],\n        \"icon\": \"mdi:form-dropdown\"\n    },\n    {\n        \"reg\": 1020,\n        \"key\": \"temperature_unit\",\n        \"name\": \"Temperature Unit\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"select\",\n        \"options\": [\n            \"°C\",\n            \"°F\"\n        ],\n        \"icon\": \"mdi:form-dropdown\"\n    },\n    {\n        \"reg\": 1021,\n        \"key\": \"4_way_valve_polarity\",\n        \"name\": \"4-way Valve Polarity\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"select\",\n        \"options\": [\n            \"On-heating\",\n            \"Off-heating\"\n        ],\n        \"icon\": \"mdi:form-dropdown\"\n    },\n    {\n        \"reg\": 1022,\n        \"key\": \"3_way_valve_polarity\",\n        \"name\": \"3-way Valve Polarity\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"select\",\n        \"options\": [\n            \"On-heat water\",\n            \"Off-heat water\"\n        ],\n        \"icon\": \"mdi:form-dropdown\"\n    },\n    {\n        \"reg\": 1023,\n        \"key\": \"frequency_control_p_value\",\n        \"name\": \"Frequency Control P Value\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"Hz\",\n        \"devClass\": \"frequency\",\n        \"icon\": \"mdi:sine-wave\",\n        \"min\": 1,\n        \"max\": 100\n    },\n    {\n        \"reg\": 1024,\n        \"key\": \"frequency_control_i_value\",\n        \"name\": \"Frequency Control I Value\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"Hz\",\n        \"devClass\": \"frequency\",\n        \"icon\": \"mdi:sine-wave\",\n        \"min\": 1,\n        \"max\": 100\n    },\n    {\n        \"reg\": 1025,\n        \"key\": \"frequency_control_d_value\",\n        \"name\": \"Frequency Control D Value\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"Hz\",\n        \"devClass\": \"frequency\",\n        \"icon\": \"mdi:sine-wave\",\n        \"min\": 0,\n        \"max\": 100\n    },\n    {\n        \"reg\": 1026,\n        \"key\": \"min_compressor_frequency\",\n        \"name\": \"Min Compressor Frequency\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"Hz\",\n        \"devClass\": \"frequency\",\n        \"icon\": \"mdi:sine-wave\",\n        \"min\": 20,\n        \"max\": 60\n    },\n    {\n        \"reg\": 1027,\n        \"key\": \"max_compressor_frequency\",\n        \"name\": \"Max Compressor Frequency\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"Hz\",\n        \"devClass\": \"frequency\",\n        \"icon\": \"mdi:sine-wave\",\n        \"min\": 30,\n        \"max\": 120\n    },\n    {\n        \"reg\": 1028,\n        \"key\": \"model_selection\",\n        \"name\": \"Model Selection\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"icon\": \"mdi:tune\",\n        \"min\": 0,\n        \"max\": 50\n    },\n    {\n        \"reg\": 1029,\n        \"key\": \"manual_drive_frequency\",\n        \"name\": \"Manual Drive Frequency\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"Hz\",\n        \"devClass\": \"frequency\",\n        \"icon\": \"mdi:sine-wave\",\n        \"min\": 0,\n        \"max\": 90\n    },\n    {\n        \"reg\": 1030,\n        \"key\": \"pfc_function_enable\",\n        \"name\": \"PFC Function Enable\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"switch\",\n        \"icon\": \"mdi:toggle-switch\"\n    },\n    {\n        \"reg\": 1032,\n        \"key\": \"unit_address\",\n        \"name\": \"Unit Address\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"icon\": \"mdi:tune\",\n        \"min\": 1,\n        \"max\": 247\n    },\n    {\n        \"reg\": 1040,\n        \"key\": \"antifreeze_temp\",\n        \"name\": \"Antifreeze Temp\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -10.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1041,\n        \"key\": \"antifreeze_low_pressure\",\n        \"name\": \"Antifreeze Low Pressure\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"bar\",\n        \"devClass\": \"pressure\",\n        \"icon\": \"mdi:gauge\",\n        \"min\": 0.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1042,\n        \"key\": \"antifreeze_temp_difference\",\n        \"name\": \"Antifreeze Temp Difference\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 0.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1043,\n        \"key\": \"shutdown_ambient_temp\",\n        \"name\": \"Shutdown Ambient Temp\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -30.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1044,\n        \"key\": \"safe_discharge_temp\",\n        \"name\": \"Safe Discharge Temp\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 80.0,\n        \"max\": 130.0\n    },\n    {\n        \"reg\": 1045,\n        \"key\": \"spray_valve_open_temp\",\n        \"name\": \"Spray Valve Open Temp\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 10.0,\n        \"max\": 50.0\n    },\n    {\n        \"reg\": 1059,\n        \"key\": \"max_speed_in_heating\",\n        \"name\": \"Max Speed in Heating\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"rpm\",\n        \"icon\": \"mdi:fan\",\n        \"min\": 0,\n        \"max\": 2000\n    },\n    {\n        \"reg\": 1060,\n        \"key\": \"min_speed_in_heating\",\n        \"name\": \"Min Speed in Heating\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"rpm\",\n        \"icon\": \"mdi:fan\",\n        \"min\": 0,\n        \"max\": 2000\n    },\n    {\n        \"reg\": 1061,\n        \"key\": \"suction_lp_for_heating\",\n        \"name\": \"Suction LP for Heating\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"bar\",\n        \"devClass\": \"pressure\",\n        \"icon\": \"mdi:gauge\",\n        \"min\": 0.0,\n        \"max\": 20.0\n    },\n    {\n        \"reg\": 1062,\n        \"key\": \"suction_hp_for_heating\",\n        \"name\": \"Suction HP for Heating\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"bar\",\n        \"devClass\": \"pressure\",\n        \"icon\": \"mdi:gauge\",\n        \"min\": 0.0,\n        \"max\": 20.0\n    },\n    {\n        \"reg\": 1063,\n        \"key\": \"max_speed_in_cooling\",\n        \"name\": \"Max Speed in Cooling\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"rpm\",\n        \"icon\": \"mdi:fan\",\n        \"min\": 0,\n        \"max\": 2000\n    },\n    {\n        \"reg\": 1064,\n        \"key\": \"min_speed_in_cooling\",\n        \"name\": \"Min Speed in Cooling\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"rpm\",\n        \"icon\": \"mdi:fan\",\n        \"min\": 0,\n        \"max\": 2000\n    },\n    {\n        \"reg\": 1065,\n        \"key\": \"discharge_hp_for_cooling\",\n        \"name\": \"Discharge HP for Cooling\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"bar\",\n        \"devClass\": \"pressure\",\n        \"icon\": \"mdi:gauge\",\n        \"min\": 0.0,\n        \"max\": 50.0\n    },\n    {\n        \"reg\": 1066,\n        \"key\": \"discharge_lp_for_cooling\",\n        \"name\": \"Discharge LP for Cooling\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"bar\",\n        \"devClass\": \"pressure\",\n        \"icon\": \"mdi:gauge\",\n        \"min\": 0.0,\n        \"max\": 50.0\n    },\n    {\n        \"reg\": 1067,\n        \"key\": \"manual_fan_speed\",\n        \"name\": \"Manual Fan Speed\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"rpm\",\n        \"icon\": \"mdi:fan\",\n        \"min\": 0,\n        \"max\": 2000\n    },\n    {\n        \"reg\": 1071,\n        \"key\": \"mute_mode_fan_speed\",\n        \"name\": \"Mute Mode Fan Speed\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"rpm\",\n        \"icon\": \"mdi:fan\",\n        \"min\": 300,\n        \"max\": 1300\n    },\n    {\n        \"reg\": 1072,\n        \"key\": \"dc_ec_fan_rated_speed\",\n        \"name\": \"DC/EC Fan Rated Speed\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"rpm\",\n        \"icon\": \"mdi:fan\",\n        \"min\": 0,\n        \"max\": 1300\n    },\n    {\n        \"reg\": 1073,\n        \"key\": \"fan_motor_type\",\n        \"name\": \"Fan Motor Type\",\n        \"entityCategory\": \"config\",\n        \"block\": 1,\n        \"component\": \"select\",\n        \"options\": [\n            \"AC\",\n            \"DC\",\n            \"2xDC\"\n        ],\n        \"icon\": \"mdi:form-dropdown\"\n    },\n    {\n        \"reg\": 1101,\n        \"key\": \"exit_defrost_temp\",\n        \"name\": \"Exit Defrost Temp\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 1.0,\n        \"max\": 40.0\n    },\n    {\n        \"reg\": 1102,\n        \"key\": \"exit_defrost_pressure\",\n        \"name\": \"Exit Defrost Pressure\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 1.0,\n        \"max\": 25.0\n    },\n    {\n        \"reg\": 1103,\n        \"key\": \"defrost_cycle\",\n        \"name\": \"Defrost Cycle\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"min\",\n        \"icon\": \"mdi:timer-sand\",\n        \"min\": 1,\n        \"max\": 90\n    },\n    {\n        \"reg\": 1104,\n        \"key\": \"max_defrost_time\",\n        \"name\": \"Max Defrost Time\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"min\",\n        \"icon\": \"mdi:timer-sand\",\n        \"min\": 1,\n        \"max\": 20\n    },\n    {\n        \"reg\": 1105,\n        \"key\": \"sliding_high_point_lp\",\n        \"name\": \"Sliding High Point LP\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 1.0,\n        \"max\": 20.0\n    },\n    {\n        \"reg\": 1106,\n        \"key\": \"sliding_low_point_lp\",\n        \"name\": \"Sliding Low Point LP\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 1.0,\n        \"max\": 20.0\n    },\n    {\n        \"reg\": 1107,\n        \"key\": \"sliding_high_point_of_at\",\n        \"name\": \"Sliding High Point of AT\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -10.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1108,\n        \"key\": \"sliding_low_point_of_at\",\n        \"name\": \"Sliding Low Point of AT\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -30.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1109,\n        \"key\": \"sliding_defrost\",\n        \"name\": \"Sliding Defrost\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"switch\",\n        \"icon\": \"mdi:toggle-switch\"\n    },\n    {\n        \"reg\": 1110,\n        \"key\": \"electric_heater_defrost\",\n        \"name\": \"Electric Heater Defrost\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"switch\",\n        \"icon\": \"mdi:toggle-switch\"\n    },\n    {\n        \"reg\": 1111,\n        \"key\": \"defrost_frequency\",\n        \"name\": \"Defrost Frequency\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"Hz\",\n        \"devClass\": \"frequency\",\n        \"icon\": \"mdi:sine-wave\",\n        \"min\": 0,\n        \"max\": 90\n    },\n    {\n        \"reg\": 1127,\n        \"key\": \"adjustment_mode\",\n        \"name\": \"Adjustment Mode\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"select\",\n        \"options\": [\n            \"Manual\",\n            \"Auto\"\n        ],\n        \"icon\": \"mdi:form-dropdown\"\n    },\n    {\n        \"reg\": 1128,\n        \"key\": \"superheat_in_heating\",\n        \"name\": \"Superheat in Heating\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -10.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1129,\n        \"key\": \"superheat_comp_1_heat\",\n        \"name\": \"Superheat Comp 1 Heat\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -10.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1130,\n        \"key\": \"superheat_comp_2_heat\",\n        \"name\": \"Superheat Comp 2 Heat\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -10.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1131,\n        \"key\": \"initial_steps_in_heat\",\n        \"name\": \"Initial Steps in Heat\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 0,\n        \"max\": 480\n    },\n    {\n        \"reg\": 1132,\n        \"key\": \"initial_steps_comp_1\",\n        \"name\": \"Initial Steps Comp 1\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"steps\",\n        \"icon\": \"mdi:valve\",\n        \"min\": 0,\n        \"max\": 200\n    },\n    {\n        \"reg\": 1133,\n        \"key\": \"initial_steps_comp_2\",\n        \"name\": \"Initial Steps Comp 2\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"steps\",\n        \"icon\": \"mdi:valve\",\n        \"min\": 0,\n        \"max\": 200\n    },\n    {\n        \"reg\": 1134,\n        \"key\": \"initial_steps_comp_3\",\n        \"name\": \"Initial Steps Comp 3\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"steps\",\n        \"icon\": \"mdi:valve\",\n        \"min\": 0,\n        \"max\": 200\n    },\n    {\n        \"reg\": 1135,\n        \"key\": \"min_initial_steps\",\n        \"name\": \"Min Initial Steps\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"steps\",\n        \"icon\": \"mdi:valve\",\n        \"min\": 0,\n        \"max\": 200\n    },\n    {\n        \"reg\": 1136,\n        \"key\": \"defrost_steps\",\n        \"name\": \"Defrost Steps\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"steps\",\n        \"icon\": \"mdi:valve\",\n        \"min\": 0,\n        \"max\": 480\n    },\n    {\n        \"reg\": 1137,\n        \"key\": \"superheat_in_cooling\",\n        \"name\": \"Superheat in Cooling\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -10.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1138,\n        \"key\": \"initial_steps_in_cool\",\n        \"name\": \"Initial Steps in Cool\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"steps\",\n        \"icon\": \"mdi:valve\",\n        \"min\": 0,\n        \"max\": 480\n    },\n    {\n        \"reg\": 1139,\n        \"key\": \"exhaust_assist_open_time\",\n        \"name\": \"Exhaust Assist Open Time\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"min\",\n        \"icon\": \"mdi:timer-sand\",\n        \"min\": 0,\n        \"max\": 100\n    },\n    {\n        \"reg\": 1140,\n        \"key\": \"suction_superheat_open_time\",\n        \"name\": \"Suction Superheat Open Time\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"min\",\n        \"icon\": \"mdi:timer-sand\",\n        \"min\": 0,\n        \"max\": 100\n    },\n    {\n        \"reg\": 1141,\n        \"key\": \"control_p_value\",\n        \"name\": \"Control P Value\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"icon\": \"mdi:tune\",\n        \"min\": 0,\n        \"max\": 100\n    },\n    {\n        \"reg\": 1142,\n        \"key\": \"control_i_value\",\n        \"name\": \"Control I Value\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"icon\": \"mdi:tune\",\n        \"min\": 0,\n        \"max\": 100\n    },\n    {\n        \"reg\": 1143,\n        \"key\": \"control_d_value\",\n        \"name\": \"Control D Value\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"icon\": \"mdi:tune\",\n        \"min\": 0,\n        \"max\": 100\n    },\n    {\n        \"reg\": 1144,\n        \"key\": \"manual_steps\",\n        \"name\": \"Manual Steps\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"steps\",\n        \"icon\": \"mdi:valve\",\n        \"min\": 0,\n        \"max\": 550\n    },\n    {\n        \"reg\": 1145,\n        \"key\": \"superheat_comp_1\",\n        \"name\": \"Superheat Comp 1\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -10.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1146,\n        \"key\": \"superheat_comp_2\",\n        \"name\": \"Superheat Comp 2\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -10.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1160,\n        \"key\": \"disinfection_setpoint\",\n        \"name\": \"Disinfection Setpoint\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 60.0,\n        \"max\": 70.0\n    },\n    {\n        \"reg\": 1161,\n        \"key\": \"time_of_duration\",\n        \"name\": \"Time of Duration\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"min\",\n        \"icon\": \"mdi:timer-sand\",\n        \"min\": 0,\n        \"max\": 60\n    },\n    {\n        \"reg\": 1162,\n        \"key\": \"start_time\",\n        \"name\": \"Start Time\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"h\",\n        \"icon\": \"mdi:clock-outline\",\n        \"min\": 0,\n        \"max\": 23\n    },\n    {\n        \"reg\": 1163,\n        \"key\": \"work_cycle\",\n        \"name\": \"Work Cycle\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"Days\",\n        \"icon\": \"mdi:calendar-range\",\n        \"min\": 1,\n        \"max\": 30\n    },\n    {\n        \"reg\": 1170,\n        \"key\": \"pump_advanced_start_time\",\n        \"name\": \"Pump Advanced Start Time\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"min\",\n        \"icon\": \"mdi:timer-sand\",\n        \"min\": 0,\n        \"max\": 30\n    },\n    {\n        \"reg\": 1171,\n        \"key\": \"pump_manual_control\",\n        \"name\": \"Pump Manual-control\",\n        \"entityCategory\": \"config\",\n        \"block\": 2,\n        \"component\": \"switch\",\n        \"icon\": \"mdi:toggle-switch\"\n    },\n    {\n        \"reg\": 1194,\n        \"key\": \"power_on_return_diff\",\n        \"name\": \"Power-on Return Diff\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 0.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1195,\n        \"key\": \"standby_temp_diff\",\n        \"name\": \"Standby Temp Diff\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 0.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1196,\n        \"key\": \"min_hot_water_setpoint\",\n        \"name\": \"Min Hot Water Setpoint\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 40.0,\n        \"max\": 65.0\n    },\n    {\n        \"reg\": 1197,\n        \"key\": \"max_hot_water_setpoint\",\n        \"name\": \"Max Hot Water Setpoint\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 6.0,\n        \"max\": 65.0\n    },\n    {\n        \"reg\": 1198,\n        \"key\": \"min_heating_setpoint\",\n        \"name\": \"Min Heating Setpoint\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 20.0,\n        \"max\": 30.0\n    },\n    {\n        \"reg\": 1199,\n        \"key\": \"max_heating_setpoint\",\n        \"name\": \"Max Heating Setpoint\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 30.0,\n        \"max\": 60.0\n    },\n    {\n        \"reg\": 1200,\n        \"key\": \"min_cooling_setpoint\",\n        \"name\": \"Min Cooling Setpoint\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 8.0,\n        \"max\": 20.0\n    },\n    {\n        \"reg\": 1201,\n        \"key\": \"max_cooling_setpoint\",\n        \"name\": \"Max Cooling Setpoint\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 20.0,\n        \"max\": 30.0\n    },\n    {\n        \"reg\": 1202,\n        \"key\": \"electric_heating_mode\",\n        \"name\": \"Electric Heating Mode\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"select\",\n        \"options\": [\n            \"Not used\",\n            \"Waterline\",\n            \"Water tank\"\n        ],\n        \"icon\": \"mdi:form-dropdown\"\n    },\n    {\n        \"reg\": 1203,\n        \"key\": \"electric_heater_start_diff\",\n        \"name\": \"Electric-heater Start Diff\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 0.0,\n        \"max\": 10.0\n    },\n    {\n        \"reg\": 1204,\n        \"key\": \"electric_heater_start_at\",\n        \"name\": \"Electric-heater Start AT\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -10.0,\n        \"max\": 30.0\n    },\n    {\n        \"reg\": 1205,\n        \"key\": \"delay_of_electric_heater\",\n        \"name\": \"Delay of Electric-heater\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 1,\n        \"step\": 1,\n        \"unit\": \"min\",\n        \"icon\": \"mdi:timer-sand\",\n        \"min\": 0,\n        \"max\": 60\n    },\n    {\n        \"reg\": 1206,\n        \"key\": \"electric_heater_instant_start_at\",\n        \"name\": \"Electric-heater Instant Start AT\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -30.0,\n        \"max\": 20.0\n    },\n    {\n        \"reg\": 1207,\n        \"key\": \"compensation_on_low_at\",\n        \"name\": \"Compensation-ON Low AT\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 18.0,\n        \"max\": 0.0\n    },\n    {\n        \"reg\": 1208,\n        \"key\": \"compensation_off_low_at\",\n        \"name\": \"Compensation-OFF Low AT\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -30.0,\n        \"max\": 60.0\n    },\n    {\n        \"reg\": 1209,\n        \"key\": \"low_at_max_compensation_target\",\n        \"name\": \"Low-AT Max-Compensation Target\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 20.0,\n        \"max\": 60.0\n    },\n    {\n        \"reg\": 1210,\n        \"key\": \"compensation_on_high_at\",\n        \"name\": \"Compensation-ON High AT\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": -30.0,\n        \"max\": 60.0\n    },\n    {\n        \"reg\": 1211,\n        \"key\": \"compensation_off_high_at\",\n        \"name\": \"Compensation-OFF High AT\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 20.0,\n        \"max\": 60.0\n    },\n    {\n        \"reg\": 1212,\n        \"key\": \"high_at_max_compensation_target\",\n        \"name\": \"High-AT Max-Compensation Target\",\n        \"entityCategory\": \"config\",\n        \"block\": 3,\n        \"component\": \"number\",\n        \"mode\": \"box\",\n        \"scale\": 0.1,\n        \"step\": 0.1,\n        \"unit\": \"°C\",\n        \"devClass\": \"temperature\",\n        \"icon\": \"mdi:thermometer-cog\",\n        \"min\": 20.0,\n        \"max\": 60.0\n    }\n];\n\n// Build registry map for fast O(1) lookup by register number\nconst configRegisterMap = {};\nfor (const item of configRegisterList) {\n    configRegisterMap[item.reg] = item;\n}\n\n// Store registry and ordered list in flow context\nflow.set(\"hp_config_registry\", configRegisterMap);\nflow.set(\"hp_config_list\", configRegisterList);\n\n// --- Logic ---\nvar configMessages = [];\n\n// 1. Build Discovery Messages for Telemetry Sensors\nfor (const [jsonKey, config] of Object.entries(sensorMap)) {\n    let component = config.component || \"sensor\"; \n    let safeId = jsonKey.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_'); \n    let uniqueId = `${deviceIdentifier}_${safeId}`;\n    let objectId = `hp_${config.name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_')}`;\n    let configTopic = `${discoveryPrefix}/${component}/${uniqueId}/config`;\n\n    let payload = {\n        \"name\": config.name,\n        \"unique_id\": uniqueId,\n        \"object_id\": objectId,\n        \"state_topic\": stateTopic,\n        \"value_template\": `{{ value_json['${jsonKey}'] }}`,\n        \"device\": {\n            \"identifiers\": [deviceIdentifier],\n            \"name\": deviceName,\n            \"model\": \"Heat Pump Controller\",\n            \"manufacturer\": \"Node-RED\"\n        }\n    };\n\n    if (component === \"binary_sensor\") {\n        payload.payload_on = true;\n        payload.payload_off = false;\n        if (config.devClass) payload.device_class = config.devClass;\n        if (config.icon) payload.icon = config.icon;\n    } else {\n        if (config.unit) {\n            payload.state_class = \"measurement\";\n            payload.unit_of_measurement = config.unit;\n        }\n        if (config.devClass) payload.device_class = config.devClass;\n        if (config.icon) payload.icon = config.icon;\n    }\n\n    if (config.entityCategory) payload.entity_category = config.entityCategory;\n\n    configMessages.push({\n        topic: configTopic,\n        payload: JSON.stringify(payload),\n        retain: true\n    });\n}\n\n// 2. Build Discovery Messages for Configuration Entities (switch, select, number)\n// Covers all 109 registers: 21 Controls (Controls section) + 88 Configuration (Configuration section)\nfor (const config of configRegisterList) {\n    let regNum = config.reg;\n    let component = config.component || \"number\";\n    let safeId = `reg_${regNum}_${config.key.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_')}`;\n    let uniqueId = `${deviceIdentifier}_${safeId}`;\n    let objectId = `hp_${config.key}`;\n    let configTopic = `${discoveryPrefix}/${component}/${uniqueId}/config`;\n    let commandTopic = `${baseTopic}/${deviceIdentifier}/config/${regNum}/set`;\n\n    let payload = {\n        \"name\": config.name,\n        \"unique_id\": uniqueId,\n        \"object_id\": objectId,\n        \"state_topic\": configStateTopic,\n        \"command_topic\": commandTopic,\n        \"device\": {\n            \"identifiers\": [deviceIdentifier],\n            \"name\": deviceName,\n            \"model\": \"Heat Pump Controller\",\n            \"manufacturer\": \"Node-RED\"\n        }\n    };\n\n    if (config.icon) payload.icon = config.icon;\n    if (config.entityCategory) payload.entity_category = config.entityCategory;\n\n    if (component === \"switch\") {\n        payload.payload_on = \"ON\";\n        payload.payload_off = \"OFF\";\n        payload.state_on = \"ON\";\n        payload.state_off = \"OFF\";\n        payload.value_template = `{{ 'ON' if value_json['${config.key}'] == 1 or value_json['${config.key}'] == 'ON' else 'OFF' }}`;\n    } else if (component === \"select\") {\n        payload.options = config.options || [];\n        payload.value_template = `{{ value_json['${config.key}_name'] }}`;\n    } else {\n        // number component\n        payload.value_template = `{{ value_json['${config.key}'] }}`;\n        if (config.unit) payload.unit_of_measurement = config.unit;\n        if (config.devClass) payload.device_class = config.devClass;\n        if (config.min !== undefined) payload.min = config.min;\n        if (config.max !== undefined) payload.max = config.max;\n        if (config.step !== undefined) payload.step = config.step;\n        if (config.mode) payload.mode = config.mode;\n    }\n\n    configMessages.push({\n        topic: configTopic,\n        payload: JSON.stringify(payload),\n        retain: true\n    });\n}\n\n// Clean up removed / obsolete discovery topics from Home Assistant\nconst obsoleteDiscoveryTopics = [\n    `${discoveryPrefix}/binary_sensor/${deviceIdentifier}_high_pressure_switch_s01_/config`,\n    `${discoveryPrefix}/binary_sensor/${deviceIdentifier}_low_pressure_switch_s02_/config`,\n    `${discoveryPrefix}/binary_sensor/${deviceIdentifier}_water_flow_switch_s03_/config`,\n    `${discoveryPrefix}/binary_sensor/${deviceIdentifier}_emergency_switch_s04_/config`,\n    `${discoveryPrefix}/binary_sensor/${deviceIdentifier}_heater_overload_switch_s07_/config`,\n    `${discoveryPrefix}/binary_sensor/${deviceIdentifier}_reserved_s06_/config`,\n    `${discoveryPrefix}/binary_sensor/${deviceIdentifier}_reserved_s08_/config`\n];\nfor (const topic of obsoleteDiscoveryTopics) {\n    configMessages.push({\n        topic: topic,\n        payload: \"\",\n        retain: true\n    });\n}\n\nreturn [configMessages];\n",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 420,
-        "y": 600,
+        "x": 360,
+        "y": 620,
         "wires": [
             [
                 "9b21b2103f5783a9"
@@ -328,8 +336,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 230,
-        "y": 600,
+        "x": 170,
+        "y": 620,
         "wires": [
             [
                 "a671a68f7d9c1dfb"
@@ -350,8 +358,8 @@
         "correl": "",
         "expiry": "",
         "broker": "69189174c80ee98f",
-        "x": 590,
-        "y": 600,
+        "x": 530,
+        "y": 620,
         "wires": []
     },
     {
@@ -366,8 +374,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1140,
-        "y": 140,
+        "x": 1080,
+        "y": 160,
         "wires": [
             [
                 "f93a909b5a13c395"
@@ -388,8 +396,8 @@
         "correl": "",
         "expiry": "",
         "broker": "69189174c80ee98f",
-        "x": 1310,
-        "y": 140,
+        "x": 1250,
+        "y": 160,
         "wires": []
     },
     {
@@ -404,8 +412,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 960,
-        "y": 520,
+        "x": 900,
+        "y": 540,
         "wires": [
             [
                 "b3facb15c8e4808c"
@@ -424,8 +432,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1200,
-        "y": 520,
+        "x": 1140,
+        "y": 540,
         "wires": []
     },
     {
@@ -440,8 +448,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 980,
-        "y": 560,
+        "x": 920,
+        "y": 580,
         "wires": [
             [
                 "4247ccf6095aede6",
@@ -462,8 +470,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1200,
-        "y": 560,
+        "x": 1140,
+        "y": 580,
         "wires": []
     },
     {
@@ -478,8 +486,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 980,
-        "y": 420,
+        "x": 920,
+        "y": 440,
         "wires": [
             [
                 "cb9649fadfcb1e90"
@@ -498,8 +506,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 980,
-        "y": 460,
+        "x": 920,
+        "y": 480,
         "wires": [
             [
                 "fee2fe5c34fbcc3b",
@@ -520,8 +528,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1220,
-        "y": 420,
+        "x": 1160,
+        "y": 440,
         "wires": []
     },
     {
@@ -536,8 +544,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1220,
-        "y": 460,
+        "x": 1160,
+        "y": 480,
         "wires": []
     },
     {
@@ -552,8 +560,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 950,
-        "y": 780,
+        "x": 890,
+        "y": 800,
         "wires": [
             [
                 "5e1d95ce9285035a"
@@ -572,8 +580,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 970,
-        "y": 820,
+        "x": 910,
+        "y": 840,
         "wires": [
             [
                 "4457b51ba8d9ec77"
@@ -592,8 +600,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1220,
-        "y": 780,
+        "x": 1160,
+        "y": 800,
         "wires": []
     },
     {
@@ -608,8 +616,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1220,
-        "y": 820,
+        "x": 1160,
+        "y": 840,
         "wires": []
     },
     {
@@ -624,8 +632,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 960,
-        "y": 980,
+        "x": 900,
+        "y": 1000,
         "wires": [
             [
                 "aa228642fee611e9"
@@ -644,8 +652,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1200,
-        "y": 980,
+        "x": 1140,
+        "y": 1000,
         "wires": []
     },
     {
@@ -660,8 +668,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 960,
-        "y": 940,
+        "x": 900,
+        "y": 960,
         "wires": [
             [
                 "1cb1f0fe72429c78"
@@ -680,8 +688,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1180,
-        "y": 940,
+        "x": 1120,
+        "y": 960,
         "wires": []
     },
     {
@@ -754,8 +762,8 @@
         "fanOutMultipleResult": false,
         "setTopic": true,
         "outputs": 1,
-        "x": 1470,
-        "y": 360,
+        "x": 1410,
+        "y": 380,
         "wires": [
             [
                 "d09de823f7be09ed"
@@ -774,8 +782,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1640,
-        "y": 360,
+        "x": 1580,
+        "y": 380,
         "wires": []
     },
     {
@@ -789,8 +797,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 1970,
-        "y": 460,
+        "x": 1910,
+        "y": 480,
         "wires": [
             []
         ]
@@ -807,8 +815,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1430,
-        "y": 460,
+        "x": 1370,
+        "y": 480,
         "wires": [
             [
                 "format_node_01"
@@ -827,8 +835,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1690,
-        "y": 460,
+        "x": 1630,
+        "y": 480,
         "wires": [
             [
                 "43c2bff61b834d5f"
@@ -856,8 +864,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 1690,
-        "y": 420,
+        "x": 1630,
+        "y": 440,
         "wires": [
             [
                 "3ec6077a4401f7cc"
@@ -875,8 +883,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 1930,
-        "y": 420,
+        "x": 1870,
+        "y": 440,
         "wires": [
             []
         ]
@@ -894,8 +902,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1620,
-        "y": 220,
+        "x": 1560,
+        "y": 240,
         "wires": []
     },
     {
@@ -1276,6 +1284,15 @@
                 "offsetbit": 0,
                 "scale": "1",
                 "mask": ""
+            },
+            {
+                "type": "int16be",
+                "name": "Reg_2085",
+                "offset": 175,
+                "length": 1,
+                "offsetbit": 0,
+                "scale": "0",
+                "mask": ""
             }
         ],
         "swap1": "",
@@ -1292,8 +1309,8 @@
         "fanOutMultipleResult": false,
         "setTopic": true,
         "outputs": 1,
-        "x": 950,
-        "y": 240,
+        "x": 890,
+        "y": 260,
         "wires": [
             [
                 "be57d15453704866"
@@ -1312,8 +1329,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1280,
-        "y": 260,
+        "x": 1220,
+        "y": 280,
         "wires": [
             [
                 "b0a712e73bdbccb7",
@@ -1332,8 +1349,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 1510,
-        "y": 260,
+        "x": 1450,
+        "y": 280,
         "wires": [
             []
         ]
@@ -1653,6 +1670,69 @@
                 "offsetbit": 0,
                 "scale": "0",
                 "mask": ""
+            },
+            {
+                "type": "bool",
+                "name": "High Pressure Alarm (S01)",
+                "offset": 176,
+                "length": 1,
+                "offsetbit": 0,
+                "scale": "1",
+                "mask": ""
+            },
+            {
+                "type": "bool",
+                "name": "Low Pressure Alarm (S02)",
+                "offset": 176,
+                "length": 1,
+                "offsetbit": 1,
+                "scale": "1",
+                "mask": ""
+            },
+            {
+                "type": "bool",
+                "name": "Water Flow Alarm (S03)",
+                "offset": 176,
+                "length": 1,
+                "offsetbit": 2,
+                "scale": "1",
+                "mask": ""
+            },
+            {
+                "type": "bool",
+                "name": "Emergency Switch Alarm (S04)",
+                "offset": 176,
+                "length": 1,
+                "offsetbit": 3,
+                "scale": "1",
+                "mask": ""
+            },
+            {
+                "type": "bool",
+                "name": "Mode Switch (S05)",
+                "offset": 176,
+                "length": 1,
+                "offsetbit": 4,
+                "scale": "1",
+                "mask": ""
+            },
+            {
+                "type": "bool",
+                "name": "Heater Overload Alarm (S07)",
+                "offset": 176,
+                "length": 1,
+                "offsetbit": 6,
+                "scale": "1",
+                "mask": ""
+            },
+            {
+                "type": "uint8",
+                "name": "Alarm detail",
+                "offset": 175,
+                "length": 1,
+                "offsetbit": 0,
+                "scale": "0",
+                "mask": ""
             }
         ],
         "swap1": "",
@@ -1669,8 +1749,8 @@
         "fanOutMultipleResult": false,
         "setTopic": true,
         "outputs": 1,
-        "x": 720,
-        "y": 140,
+        "x": 660,
+        "y": 160,
         "wires": [
             [
                 "dfc65a3e299152d7",
@@ -1699,8 +1779,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 1490,
-        "y": 180,
+        "x": 1430,
+        "y": 200,
         "wires": [
             [
                 "e3f8ec75eabdeb69"
@@ -1718,8 +1798,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 1710,
-        "y": 180,
+        "x": 1650,
+        "y": 200,
         "wires": [
             []
         ]
@@ -1730,8 +1810,8 @@
         "z": "1c00011a6f22edfe",
         "name": "",
         "info": "Toto jsou jediná místa ve zprávě, kde není nula.\nJediné, co se mění ke item4 mezi 1 a 0.\nNevím, co to znamená, interval je nepravidelný a je několik desítek sekund až minut",
-        "x": 1800,
-        "y": 360,
+        "x": 1740,
+        "y": 380,
         "wires": []
     },
     {
@@ -1740,8 +1820,8 @@
         "z": "1c00011a6f22edfe",
         "name": "",
         "info": "hodnoty všeho v 0 kromě Reg_2012, které je 1",
-        "x": 1680,
-        "y": 260,
+        "x": 1620,
+        "y": 280,
         "wires": []
     },
     {
@@ -1756,8 +1836,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1070,
-        "y": 300,
+        "x": 1010,
+        "y": 320,
         "wires": [
             [
                 "7f308bf97b9f2b2e"
@@ -1775,8 +1855,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 1380,
-        "y": 300,
+        "x": 1320,
+        "y": 320,
         "wires": [
             []
         ]
@@ -1802,8 +1882,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 910,
-        "y": 360,
+        "x": 850,
+        "y": 380,
         "wires": [
             [
                 "41660c9be3c708d5"
@@ -1821,8 +1901,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 1140,
-        "y": 360,
+        "x": 1080,
+        "y": 380,
         "wires": [
             []
         ]
@@ -1839,8 +1919,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1410,
-        "y": 560,
+        "x": 1350,
+        "y": 580,
         "wires": [
             [
                 "f9560b509c726255"
@@ -1859,8 +1939,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1670,
-        "y": 560,
+        "x": 1610,
+        "y": 580,
         "wires": [
             [
                 "dbcacfd8ed574bbd"
@@ -1878,8 +1958,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 1950,
-        "y": 560,
+        "x": 1890,
+        "y": 580,
         "wires": [
             []
         ]
@@ -1905,8 +1985,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 1710,
-        "y": 620,
+        "x": 1650,
+        "y": 640,
         "wires": [
             [
                 "c889bcf31f50f634"
@@ -1924,8 +2004,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 1970,
-        "y": 620,
+        "x": 1910,
+        "y": 640,
         "wires": [
             []
         ]
@@ -2009,8 +2089,8 @@
         "fanOutMultipleResult": false,
         "setTopic": true,
         "outputs": 1,
-        "x": 1700,
-        "y": 520,
+        "x": 1640,
+        "y": 540,
         "wires": [
             [
                 "4b3dea93c0463973"
@@ -2029,8 +2109,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1880,
-        "y": 520,
+        "x": 1820,
+        "y": 540,
         "wires": []
     },
     {
@@ -2039,8 +2119,8 @@
         "z": "1c00011a6f22edfe",
         "name": "",
         "serial": "7450e794f0202cde",
-        "x": 2400,
-        "y": 960,
+        "x": 2340,
+        "y": 980,
         "wires": []
     },
     {
@@ -2060,8 +2140,8 @@
         "drop": false,
         "allowrate": false,
         "outputs": 1,
-        "x": 2210,
-        "y": 960,
+        "x": 2150,
+        "y": 980,
         "wires": [
             [
                 "eb6c2de8d18105a0"
@@ -2080,8 +2160,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 980,
-        "y": 860,
+        "x": 920,
+        "y": 880,
         "wires": [
             [
                 "a3a1ec4971f62b62"
@@ -2100,8 +2180,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1220,
-        "y": 860,
+        "x": 1160,
+        "y": 880,
         "wires": []
     },
     {
@@ -2109,15 +2189,15 @@
         "type": "function",
         "z": "1c00011a6f22edfe",
         "name": "msg type 01,03,4 Display Read Setting",
-        "func": "var sequence = [1,3,4];\n\nif (msg.payload) {\n    var isMatch = true;\n\n    for (var i = 0; i < sequence.length; i++) {\n        if (msg.payload[i] !== sequence[i]) {\n            isMatch = false;\n            break;\n        }\n    }\n\n    if (isMatch) {\n        // Master is requesting Block 2 (start register 1181)\n        flow.set(\"last_requested_config_block\", 1181);\n        return msg;\n    }\n}\n\nreturn null;",
+        "func": "var sequence = [1,3,4];\n\nif (msg.payload) {\n    var isMatch = true;\n\n    for (var i = 0; i < sequence.length; i++) {\n        if (msg.payload[i] !== sequence[i]) {\n            isMatch = false;\n            break;\n        }\n    }\n\n    if (isMatch) {\n        if (msg.payload.length >= 4) {\n            const startReg = msg.payload[2] * 256 + msg.payload[3];\n            flow.set(\"last_requested_config_block\", startReg);\n        } else {\n            flow.set(\"last_requested_config_block\", 1181);\n        }\n        return msg;\n    }\n}\n\nreturn null;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 990,
-        "y": 620,
+        "x": 930,
+        "y": 640,
         "wires": [
             [
                 "7981d29c494740ad"
@@ -2136,8 +2216,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1020,
-        "y": 700,
+        "x": 960,
+        "y": 720,
         "wires": [
             [
                 "0e0d692c957fc22b"
@@ -2156,8 +2236,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1000,
-        "y": 660,
+        "x": 940,
+        "y": 680,
         "wires": [
             [
                 "b1ca0f5dc32895aa"
@@ -2176,8 +2256,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1240,
-        "y": 620,
+        "x": 1180,
+        "y": 640,
         "wires": []
     },
     {
@@ -2192,8 +2272,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1260,
-        "y": 660,
+        "x": 1200,
+        "y": 680,
         "wires": []
     },
     {
@@ -2208,8 +2288,8 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1300,
-        "y": 700,
+        "x": 1240,
+        "y": 720,
         "wires": []
     },
     {
@@ -2217,9 +2297,9 @@
         "type": "comment",
         "z": "1c00011a6f22edfe",
         "name": "=== LCD EMULATION & CONFIG MODIFIER ===",
-        "info": "Tato sekce obsahuje:\n1. Emulaci LCD displeje (Slave 1) pro komunikaci s Masterem.\n2. Správce konfigurace:\n   - Block 1: 90 int16be registrů 1001-1090 -> FLAG 2\n   - Block 2: 90 int16be registrů 1181-1270 -> FLAG 8\n3. Příklady úpravy parametrů (nastaví flag 2 nebo flag 8 pro vyčtení/zápis Masterem).\n4. Reset a kontrolní dotazy na aktuální registry.",
-        "x": 350,
-        "y": 1120,
+        "info": "Tato sekce obsahuje:\n1. Emulaci LCD displeje (Slave 1) pro komunikaci s Masterem.\n2. Automatické vyčtení všech parametrů při startu Node-RED:\n   - Po startu Node-RED se automaticky nastaví Flag 128 (0x8000).\n   - Master postupně zapíše všech 270 registrů (Block 1, 2 i 3).\n   - Hodnoty se uloží do paměti flow contextu a slouží jako základ pro další úpravy.\n3. Bezpečnostní pojistka:\n   - Dokud neproběhne inicializace přes Flag 128, úpravy parametrů (Flag 2, 4, 8) jsou BLOKOVÁNY.\n4. Správce konfigurace:\n   - Block 1: 90 registrů 1001-1090 -> FLAG 2\n   - Block 2: 90 registrů 1091-1180 -> FLAG 4\n   - Block 3: 90 registrů 1181-1270 -> FLAG 8\n5. Příklady úpravy parametrů přes inject nody a zobrazení stavu.",
+        "x": 290,
+        "y": 1140,
         "wires": []
     },
     {
@@ -2237,10 +2317,10 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "payload": "{\"1001\":1}",
+        "payload": "{\"1011\":0}",
         "payloadType": "json",
-        "x": 340,
-        "y": 1160,
+        "x": 280,
+        "y": 1180,
         "wires": [
             [
                 "lcd_config_manager_01"
@@ -2251,7 +2331,7 @@
         "id": "inject_get_config_01",
         "type": "inject",
         "z": "1c00011a6f22edfe",
-        "name": "Zobrazit aktuální konfiguraci (Block 1 i Block 2)",
+        "name": "Zobrazit aktuální konfiguraci (Block 1, 2 i 3)",
         "props": [
             {
                 "p": "payload"
@@ -2264,8 +2344,8 @@
         "topic": "",
         "payload": "get",
         "payloadType": "str",
-        "x": 390,
-        "y": 1240,
+        "x": 330,
+        "y": 1260,
         "wires": [
             [
                 "lcd_config_manager_01"
@@ -2276,7 +2356,7 @@
         "id": "inject_reset_config_01",
         "type": "inject",
         "z": "1c00011a6f22edfe",
-        "name": "Resetovat obě konfigurace na výchozí",
+        "name": "Resetovat všechny 3 konfigurace na výchozí",
         "props": [
             {
                 "p": "payload"
@@ -2289,8 +2369,8 @@
         "topic": "",
         "payload": "reset",
         "payloadType": "str",
-        "x": 370,
-        "y": 1280,
+        "x": 310,
+        "y": 1300,
         "wires": [
             [
                 "lcd_config_manager_01"
@@ -2301,21 +2381,24 @@
         "id": "lcd_config_manager_01",
         "type": "function",
         "z": "1c00011a6f22edfe",
-        "name": "Modify LCD Config (Block 1 & 2)",
-        "func": "// =========================================================================\n// LCD CONFIGURATION MANAGER & PARSER\n// Correct Mapping:\n// - Block 1: Reg 1001..1090 (3, 233) -> FLAG 2\n// - Block 2: Reg 1181..1270 (4, 157) -> FLAG 8\n// =========================================================================\n\nconst BASE_CONFIG_BYTES_1 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,233,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,\n    0,0,0,0,0,0,0,1,0,5,0,1,0,5,0,30,0,80,0,17,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,50,0,20,0,20,255,56,4,76,1,94,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,32,1,44,0,30,0,110,2,38,1,44,1,24,0,200,0,\n    0,0,0,0,22,0,1,1,194,2,88,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0\n];\n\nconst BASE_CONFIG_BYTES_2 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,157,1,244,0,220,0,200,0,30,0,30,1,144,\n    2,138,0,200,1,244,0,120,0,200,0,0,0,50,0,20,0,45,255,206,0,0,255,106,1,194,\n    2,38,2,38,1,194,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,16,0,1,0,20,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n];\n\nfunction getBaseRegisters(bytes, startReg) {\n    const regs = {};\n    const buf = Buffer.from(bytes);\n    for (let i = 0; i < 90; i++) {\n        regs[startReg + i] = buf.readInt16BE(i * 2);\n    }\n    return regs;\n}\n\n// 1. Initialize or load current registers for both blocks\nlet regsBlock1 = flow.get(\"lcd_config_registers_block1\");\nif (!regsBlock1) {\n    regsBlock1 = getBaseRegisters(BASE_CONFIG_BYTES_1, 1001);\n    flow.set(\"lcd_config_registers_block1\", regsBlock1);\n}\n\nlet regsBlock2 = flow.get(\"lcd_config_registers_block2\");\nif (!regsBlock2) {\n    regsBlock2 = getBaseRegisters(BASE_CONFIG_BYTES_2, 1181);\n    flow.set(\"lcd_config_registers_block2\", regsBlock2);\n}\n\nconst input = msg.payload;\n\n// 2. Command: Reset both blocks to default\nif (input === \"reset\") {\n    regsBlock1 = getBaseRegisters(BASE_CONFIG_BYTES_1, 1001);\n    regsBlock2 = getBaseRegisters(BASE_CONFIG_BYTES_2, 1181);\n    flow.set(\"lcd_config_registers_block1\", regsBlock1);\n    flow.set(\"lcd_config_registers_block2\", regsBlock2);\n    flow.set(\"lcd_event_flag\", 0);\n    node.status({ fill: \"blue\", shape: \"dot\", text: \"Reset both blocks to defaults (Flag: 0)\" });\n    return [{ payload: { block1: regsBlock1, block2: regsBlock2 }, action: \"reset\", flag: 0 }, null];\n}\n\n// 3. Command: Query current configurations\nif (input === \"get\") {\n    const flag = flow.get(\"lcd_event_flag\") ?? 0;\n    node.status({ fill: \"grey\", shape: \"dot\", text: `Configs queried (Current Flag: ${flag})` });\n    return [{ payload: { flag: flag, block1: regsBlock1, block2: regsBlock2 }, action: \"get\" }, null];\n}\n\n// 4. Command: Trigger Start (Flag 2)\nif (input === \"start\" || input === \"Start\") {\n    flow.set(\"lcd_event_flag\", 2);\n    node.status({ fill: \"green\", shape: \"dot\", text: \"Flag: 2 (Start command / Block 1)\" });\n    return [{ payload: { flag: 2, action: \"start\" }, flag: 2 }, null];\n}\n\n// 5. Update configuration: Input object e.g. { \"1040\": 52 } or { \"1191\": 520, \"1192\": 240 }\nif (typeof input === \"object\" && input !== null) {\n    const modifiedB1 = {};\n    const modifiedB2 = {};\n\n    for (const [key, val] of Object.entries(input)) {\n        const regNum = parseInt(key, 10);\n        if (isNaN(regNum)) continue;\n\n        let intVal = parseInt(val, 10);\n        if (isNaN(intVal)) intVal = 0;\n        // Clamp to int16 (-32768 to 32767)\n        if (intVal > 32767) intVal = 32767;\n        if (intVal < -32768) intVal = -32768;\n\n        if (regNum >= 1001 && regNum <= 1090) {\n            regsBlock1[regNum] = intVal;\n            modifiedB1[regNum] = intVal;\n        } else if (regNum >= 1181 && regNum <= 1270) {\n            regsBlock2[regNum] = intVal;\n            modifiedB2[regNum] = intVal;\n        }\n    }\n\n    const countB1 = Object.keys(modifiedB1).length;\n    const countB2 = Object.keys(modifiedB2).length;\n\n    if (countB1 === 0 && countB2 === 0) {\n        node.status({ fill: \"yellow\", shape: \"ring\", text: \"No valid registers in range 1001-1090 or 1181-1270\" });\n        return null;\n    }\n\n    // FLAG MAPPING:\n    // - Block 1 (Reg 1001..1090 / 3, 233) -> FLAG 2\n    // - Block 2 (Reg 1181..1270 / 4, 157) -> FLAG 8\n    let determinedFlag = 2;\n    if (msg.flag !== undefined) {\n        determinedFlag = parseInt(msg.flag, 10);\n    } else if (countB1 > 0 && countB2 === 0) {\n        determinedFlag = 2; // Flag 2 for Block 1 (1001)\n    } else if (countB2 > 0 && countB1 === 0) {\n        determinedFlag = 8; // Flag 8 for Block 2 (1181)\n    } else if (countB1 > 0) {\n        determinedFlag = 2;\n    }\n\n    flow.set(\"lcd_config_registers_block1\", regsBlock1);\n    flow.set(\"lcd_config_registers_block2\", regsBlock2);\n    flow.set(\"lcd_event_flag\", determinedFlag);\n\n    const changedSummary = [];\n    if (countB1 > 0) changedSummary.push(`B1(Flag 2) [${Object.keys(modifiedB1).join(\",\")}]`);\n    if (countB2 > 0) changedSummary.push(`B2(Flag 8) [${Object.keys(modifiedB2).join(\",\")}]`);\n\n    node.status({ fill: \"green\", shape: \"dot\", text: `Flag ${determinedFlag}: Updated ${changedSummary.join(\" \")}` });\n\n    return [\n        {\n            payload: {\n                flag: determinedFlag,\n                modifiedBlock1: modifiedB1,\n                modifiedBlock2: modifiedB2,\n                currentBlock1: regsBlock1,\n                currentBlock2: regsBlock2\n            },\n            flag: determinedFlag\n        },\n        null\n    ];\n}\n\nreturn null;\n",
+        "name": "Modify LCD Config (Block 1, 2 & 3)",
+        "func": "// =========================================================================\n// LCD CONFIGURATION MANAGER & PARSER\n// Mapping:\n// - Block 1: Reg 1001..1090 (3, 233) -> FLAG 2\n// - Block 2: Reg 1091..1180 (4, 67)  -> FLAG 4\n// - Block 3: Reg 1181..1270 (4, 157) -> FLAG 8\n// - Full Sync: Flag 0x8000 (128)\n// SAFETY GUARD: Parameter writes with Flag 2, 4, 8 are BLOCKED until\n// configuration is read out by Flag 128 on startup.\n// =========================================================================\n\nconst BASE_CONFIG_BYTES_1 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,233,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,\n    0,0,0,0,0,0,0,1,0,5,0,1,0,5,0,30,0,80,0,17,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,50,0,20,0,20,255,56,4,76,1,94,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,32,1,44,0,30,0,110,2,38,1,44,1,24,0,200,0,\n    0,0,0,0,22,0,1,1,194,2,88,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0\n];\n\nconst BASE_CONFIG_BYTES_2 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,67,0,150,0,250,0,30,0,10,0,59,0,28,0,40,\n    255,106,0,1,0,0,0,70,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,1,0,40,0,5,0,5,1,94,0,0,0,0,0,0,0,100,1,224,0,40,1,224,0,60,0,24,0,5,0,\n    3,0,0,0,0,0,20,0,40,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,138,\n    0,5,0,1,0,30,0,0,0,0,0,0,0,1,0,30,0,3,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0\n];\n\nconst BASE_CONFIG_BYTES_3 = [\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,157,1,244,0,220,0,200,0,30,0,30,1,144,\n    2,138,0,200,1,244,0,120,0,200,0,0,0,50,0,20,0,45,255,206,0,0,255,106,1,194,\n    2,38,2,38,1,194,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,16,0,1,0,20,0,0,0,\n    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n];\n\nfunction getBaseRegisters(bytes, startReg) {\n    const regs = {};\n    const buf = Buffer.from(bytes);\n    for (let i = 0; i < 90; i++) {\n        regs[startReg + i] = buf.readInt16BE(i * 2);\n    }\n    return regs;\n}\n\n// 1. Initialize or load current registers for all 3 blocks\nlet regsBlock1 = flow.get(\"lcd_config_registers_block1\");\nif (!regsBlock1) {\n    regsBlock1 = getBaseRegisters(BASE_CONFIG_BYTES_1, 1001);\n    flow.set(\"lcd_config_registers_block1\", regsBlock1);\n}\n\nlet regsBlock2 = flow.get(\"lcd_config_registers_block2\");\nif (!regsBlock2) {\n    regsBlock2 = getBaseRegisters(BASE_CONFIG_BYTES_2, 1091);\n    flow.set(\"lcd_config_registers_block2\", regsBlock2);\n}\n\nlet regsBlock3 = flow.get(\"lcd_config_registers_block3\");\nif (!regsBlock3) {\n    regsBlock3 = getBaseRegisters(BASE_CONFIG_BYTES_3, 1181);\n    flow.set(\"lcd_config_registers_block3\", regsBlock3);\n}\n\nconst input = msg.payload;\n\n// 2. Command: Reset all 3 blocks to default\nif (input === \"reset\") {\n    regsBlock1 = getBaseRegisters(BASE_CONFIG_BYTES_1, 1001);\n    regsBlock2 = getBaseRegisters(BASE_CONFIG_BYTES_2, 1091);\n    regsBlock3 = getBaseRegisters(BASE_CONFIG_BYTES_3, 1181);\n    flow.set(\"lcd_config_registers_block1\", regsBlock1);\n    flow.set(\"lcd_config_registers_block2\", regsBlock2);\n    flow.set(\"lcd_config_registers_block3\", regsBlock3);\n    flow.set(\"lcd_event_flag\", 0);\n    node.status({ fill: \"blue\", shape: \"dot\", text: \"Reset all 3 blocks to defaults (Flag: 0)\" });\n    return [{ payload: { block1: regsBlock1, block2: regsBlock2, block3: regsBlock3 }, action: \"reset\", flag: 0 }, null];\n}\n\n// 3. Command: Query current configurations\nif (input === \"get\") {\n    const flag = flow.get(\"lcd_event_flag\") ?? 0;\n    const isInit = flow.get(\"lcd_config_initialized\") === true;\n    node.status({ fill: isInit ? \"green\" : \"yellow\", shape: \"dot\", text: `Configs queried (Init: ${isInit}, Flag: ${flag})` });\n    return [{ payload: { initialized: isInit, flag: flag, block1: regsBlock1, block2: regsBlock2, block3: regsBlock3 }, action: \"get\" }, null];\n}\n\n// 4. Command: Trigger Flag 128 (Read-out all registers)\nif (input === \"read_all\" || input === \"flag_128\" || input === \"sync\") {\n    flow.set(\"lcd_config_initialized\", false);\n    flow.set(\"lcd_event_flag\", 0x8000);\n    flow.set(\"lcd_sync_status\", \"pending_flag_128\");\n    node.status({ fill: \"yellow\", shape: \"dot\", text: \"Flag: 0x8000 (Queued Flag 128 read-out)\" });\n    return [{ payload: { flag: 0x8000, action: \"read_all\" }, flag: 0x8000 }, null];\n}\n\n// -------------------------------------------------------------------------\n// SAFETY GUARD: Check if configuration has been read out via Flag 128\n// -------------------------------------------------------------------------\nconst isInitialized = flow.get(\"lcd_config_initialized\") === true;\n\n// Command: Trigger Start (Flag 2)\nif (input === \"start\" || input === \"Start\") {\n    if (!isInitialized) {\n        node.warn(\"Command blocked: Parameters have not been read out from Master via Flag 128 yet!\");\n        node.status({ fill: \"red\", shape: \"ring\", text: \"Blocked: waiting for Flag 128 read-out\" });\n        return [null, {\n            error: \"CONFIGURATION_NOT_INITIALIZED\",\n            message: \"Cannot trigger Start (Flag 2) until configuration is read out by Flag 128.\",\n            timestamp: new Date().toISOString()\n        }];\n    }\n    flow.set(\"lcd_event_flag\", 2);\n    node.status({ fill: \"green\", shape: \"dot\", text: \"Flag: 2 (Start command / Block 1)\" });\n    return [{ payload: { flag: 2, action: \"start\" }, flag: 2 }, null];\n}\n\n// 5. Update configuration: Input object e.g. { \"1040\": 52 }, { \"1101\": 150 }, or { \"1191\": 520 }\nif (typeof input === \"object\" && input !== null) {\n    if (!isInitialized) {\n        node.warn(\"Configuration modification blocked: Parameters have not been read out from Master via Flag 128 yet!\");\n        node.status({ fill: \"red\", shape: \"ring\", text: \"Blocked: waiting for Flag 128 read-out\" });\n        return [null, {\n            error: \"CONFIGURATION_NOT_INITIALIZED\",\n            message: \"Writing values with Flag 2, 4, or 8 is not allowed until configuration is read out by Flag 128.\",\n            timestamp: new Date().toISOString(),\n            rejectedInput: input\n        }];\n    }\n\n    const modifiedB1 = {};\n    const modifiedB2 = {};\n    const modifiedB3 = {};\n\n    for (const [key, val] of Object.entries(input)) {\n        const regNum = parseInt(key, 10);\n        if (isNaN(regNum)) continue;\n\n        let intVal = parseInt(val, 10);\n        if (isNaN(intVal)) intVal = 0;\n        // Clamp to int16 (-32768 to 32767)\n        if (intVal > 32767) intVal = 32767;\n        if (intVal < -32768) intVal = -32768;\n\n        if (regNum >= 1001 && regNum <= 1090) {\n            regsBlock1[regNum] = intVal;\n            modifiedB1[regNum] = intVal;\n        } else if (regNum >= 1091 && regNum <= 1180) {\n            regsBlock2[regNum] = intVal;\n            modifiedB2[regNum] = intVal;\n        } else if (regNum >= 1181 && regNum <= 1270) {\n            regsBlock3[regNum] = intVal;\n            modifiedB3[regNum] = intVal;\n        }\n    }\n\n    const countB1 = Object.keys(modifiedB1).length;\n    const countB2 = Object.keys(modifiedB2).length;\n    const countB3 = Object.keys(modifiedB3).length;\n\n    if (countB1 === 0 && countB2 === 0 && countB3 === 0) {\n        node.status({ fill: \"yellow\", shape: \"ring\", text: \"No valid registers in range 1001-1270\" });\n        return null;\n    }\n\n    // FLAG MAPPING:\n    // - Block 1 (Reg 1001..1090) -> FLAG 2\n    // - Block 2 (Reg 1091..1180) -> FLAG 4\n    // - Block 3 (Reg 1181..1270) -> FLAG 8\n    let determinedFlag = 2;\n    if (msg.flag !== undefined) {\n        determinedFlag = parseInt(msg.flag, 10);\n    } else if (countB1 > 0 && countB2 === 0 && countB3 === 0) {\n        determinedFlag = 2; // Flag 2 for Block 1 (1001..1090)\n    } else if (countB2 > 0 && countB1 === 0 && countB3 === 0) {\n        determinedFlag = 4; // Flag 4 for Block 2 (1091..1180)\n    } else if (countB3 > 0 && countB1 === 0 && countB2 === 0) {\n        determinedFlag = 8; // Flag 8 for Block 3 (1181..1270)\n    } else if (countB2 > 0) {\n        determinedFlag = 4;\n    } else if (countB3 > 0) {\n        determinedFlag = 8;\n    } else {\n        determinedFlag = 2;\n    }\n\n    flow.set(\"lcd_config_registers_block1\", regsBlock1);\n    flow.set(\"lcd_config_registers_block2\", regsBlock2);\n    flow.set(\"lcd_config_registers_block3\", regsBlock3);\n    flow.set(\"lcd_event_flag\", determinedFlag);\n\n    const changedSummary = [];\n    if (countB1 > 0) changedSummary.push(`B1(Flag 2) [${Object.keys(modifiedB1).join(\",\")}]`);\n    if (countB2 > 0) changedSummary.push(`B2(Flag 4) [${Object.keys(modifiedB2).join(\",\")}]`);\n    if (countB3 > 0) changedSummary.push(`B3(Flag 8) [${Object.keys(modifiedB3).join(\",\")}]`);\n\n    node.status({ fill: \"green\", shape: \"dot\", text: `Flag ${determinedFlag}: Updated ${changedSummary.join(\" \")}` });\n\n    return [\n        {\n            payload: {\n                flag: determinedFlag,\n                modifiedBlock1: modifiedB1,\n                modifiedBlock2: modifiedB2,\n                modifiedBlock3: modifiedB3,\n                currentBlock1: regsBlock1,\n                currentBlock2: regsBlock2,\n                currentBlock3: regsBlock3\n            },\n            flag: determinedFlag\n        },\n        null\n    ];\n}\n\nreturn null;",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 890,
-        "y": 1200,
+        "x": 830,
+        "y": 1220,
         "wires": [
             [
-                "debug_lcd_config_01"
+                "debug_lcd_config_01",
+                "func_publish_ha_config_01"
             ],
-            []
+            [
+                "debug_lcd_config_01"
+            ]
         ]
     },
     {
@@ -2331,8 +2414,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1230,
-        "y": 1180,
+        "x": 1170,
+        "y": 1200,
         "wires": []
     },
     {
@@ -2348,16 +2431,15 @@
         "targetType": "full",
         "statusVal": "",
         "statusType": "auto",
-        "x": 2020,
-        "y": 920,
+        "x": 1960,
+        "y": 940,
         "wires": []
     },
     {
         "id": "inject_modify_config_block2_01",
         "type": "inject",
         "z": "1c00011a6f22edfe",
-        "d": true,
-        "name": "Příklad: Změna parametrů (Flag 8 - Reg 1191: 520, 1192: 240, 1196: 420)",
+        "name": "Příklad: Změna parametrů (Flag 8 / Block 3 - Reg 1191: 520, 1192: 240, 1196: 420)",
         "props": [
             {
                 "p": "payload"
@@ -2368,10 +2450,10 @@
         "once": false,
         "onceDelay": 0.1,
         "topic": "",
-        "payload": "{\"1191\": 520, \"1192\": 240, \"1196\": 420}",
+        "payload": "{\"1191\":520}",
         "payloadType": "json",
-        "x": 450,
-        "y": 1200,
+        "x": 270,
+        "y": 1220,
         "wires": [
             [
                 "lcd_config_manager_01"
@@ -2383,15 +2465,15 @@
         "type": "function",
         "z": "1c00011a6f22edfe",
         "name": "Detect & Log Config Register Changes",
-        "func": "// =========================================================================\n// CONFIGURATION REGISTER CHANGE DETECTOR & LOGGER\n// Supports:\n// - FC 03 Read Responses: [01, 03, B4(180), ...]\n// - FC 16 Write Requests: [01, 10, Addr(2), Qty(2), ByteCount(180), ...]\n// Mapping:\n// - Reg 1001..1090 (3, 233) -> FLAG 2 (Block 1)\n// - Reg 1181..1270 (4, 157) -> FLAG 8 (Block 2)\n// =========================================================================\n\n// Handle manual baseline reset trigger\nif (msg.payload === \"reset_baseline\" || msg.payload === \"reset\") {\n    context.set(\"last_1001\", null);\n    context.set(\"last_1181\", null);\n    node.status({ fill: \"blue\", shape: \"dot\", text: \"Baselines reset: Next packets will be stored as new baselines\" });\n    return null;\n}\n\nlet buf = msg.payload;\nif (!Buffer.isBuffer(buf)) {\n    if (Array.isArray(buf)) {\n        buf = Buffer.from(buf);\n    } else {\n        return null;\n    }\n}\n\n// Safety check: must target Slave 1\nif (buf.length < 5 || buf[0] !== 1) {\n    return null;\n}\n\nconst fc = buf[1];\nlet startReg = null;\nlet dataOffset = null;\nlet msgTypeDesc = \"\";\n\n// -------------------------------------------------------------------------\n// Case 1: FC 03 Read Response: [01, 03, B4(180), <180 data bytes>, CRC]\n// -------------------------------------------------------------------------\nif (fc === 3 && buf[2] === 180 && buf.length >= 183) {\n    dataOffset = 3;\n    msgTypeDesc = \"FC 03 Response\";\n\n    // Confirmation at payload offset 18 (byte 21 in buffer)\n    const conf = buf.readUInt16BE(21);\n    if (conf === 1001) {\n        startReg = 1001; // Flag 2\n    } else if (conf === 1181) {\n        startReg = 1181; // Flag 8\n    } else {\n        const lastReq = flow.get(\"last_requested_config_block\");\n        startReg = (lastReq === 1181) ? 1181 : 1001;\n    }\n}\n// -------------------------------------------------------------------------\n// Case 2: FC 16 Write Multiple: [01, 10, AddrHi, AddrLo, QtyHi, QtyLo, ByteCount(180), <180 data bytes>, CRC]\n// -------------------------------------------------------------------------\nelse if (fc === 16 && buf.length >= 187 && buf[6] === 180) {\n    let addr = buf.readUInt16BE(2);\n    if (addr === 1001 || addr === 1181) {\n        startReg = addr;\n    } else if (buf.length >= 27) {\n        const conf = buf.readUInt16BE(25); // Offset 18 in payload (7 + 18 = 25)\n        if (conf === 1001 || conf === 1181) {\n            startReg = conf;\n        }\n    }\n    if (startReg) {\n        dataOffset = 7;\n        msgTypeDesc = \"FC 16 Write\";\n    }\n}\n\nif (!startReg || dataOffset === null) {\n    return null;\n}\n\n// Block identification & Flag assignment:\n// - Start Reg 1001 (3, 233) -> Block 1 / FLAG 2\n// - Start Reg 1181 (4, 157) -> Block 2 / FLAG 8\nconst assignedFlag = (startReg === 1001) ? 2 : 8;\nconst blockName = (startReg === 1001) \n    ? \"Block 1 (Reg 1001-1090 / Flag 2)\" \n    : \"Block 2 (Reg 1181-1270 / Flag 8)\";\n\n// -------------------------------------------------------------------------\n// 2. Parse all 90 registers (int16 Big-Endian)\n// -------------------------------------------------------------------------\nconst currentRegs = {};\nfor (let i = 0; i < 90; i++) {\n    const regNum = startReg + i;\n    currentRegs[regNum] = buf.readInt16BE(dataOffset + i * 2);\n}\n\n// -------------------------------------------------------------------------\n// 3. Format clean timestamp: YYYY-MM-DD HH:mm:ss\n// -------------------------------------------------------------------------\nconst now = new Date();\nconst timeStamp = now.getFullYear() + \"-\" +\n    (\"0\" + (now.getMonth() + 1)).slice(-2) + \"-\" +\n    (\"0\" + now.getDate()).slice(-2) + \" \" +\n    (\"0\" + now.getHours()).slice(-2) + \":\" +\n    (\"0\" + now.getMinutes()).slice(-2) + \":\" +\n    (\"0\" + now.getSeconds()).slice(-2);\n\n// -------------------------------------------------------------------------\n// 4. Compare with last stored snapshot for this specific block\n// -------------------------------------------------------------------------\nconst lastKey = \"last_\" + startReg;\nconst lastRegs = context.get(lastKey);\n\n// CASE A: Initial Snapshot (First time this block is seen)\nif (!lastRegs) {\n    context.set(lastKey, currentRegs);\n\n    const nonZeros = [];\n    for (let r = startReg; r < startReg + 90; r++) {\n        if (currentRegs[r] !== 0) {\n            nonZeros.push(`Reg ${r}=${currentRegs[r]}`);\n        }\n    }\n\n    const baselineText = `${timeStamp} | [BASELINE STORED] ${blockName} via ${msgTypeDesc} (${nonZeros.length} non-zero): ${nonZeros.join(\", \")}`;\n    node.status({ fill: \"blue\", shape: \"dot\", text: `Baseline stored: ${startReg === 1001 ? \"Block 1 (Flag 2)\" : \"Block 2 (Flag 8)\"}` });\n\n    msg.payload = baselineText;\n    msg.event = \"baseline_stored\";\n    msg.block = startReg;\n    msg.flag = assignedFlag;\n    msg.msgType = msgTypeDesc;\n    msg.registers = currentRegs;\n    return msg;\n}\n\n// CASE B: Subsequent Snapshot (Detect changed registers)\nconst diffs = [];\nfor (let i = 0; i < 90; i++) {\n    const regNum = startReg + i;\n    const oldVal = lastRegs[regNum];\n    const newVal = currentRegs[regNum];\n\n    if (oldVal !== newVal) {\n        const diffVal = newVal - oldVal;\n        const diffStr = diffVal > 0 ? `+${diffVal}` : `${diffVal}`;\n        const oldHex = \"0x\" + (oldVal & 0xFFFF).toString(16).toUpperCase().padStart(4, \"0\");\n        const newHex = \"0x\" + (newVal & 0xFFFF).toString(16).toUpperCase().padStart(4, \"0\");\n\n        diffs.push({\n            register: regNum,\n            oldValue: oldVal,\n            newValue: newVal,\n            diff: diffVal,\n            diffString: diffStr,\n            oldHex: oldHex,\n            newHex: newHex,\n            summary: `Reg ${regNum}: ${oldVal} -> ${newVal} (Diff: ${diffStr} | Hex: ${oldHex}->${newHex})`\n        });\n    }\n}\n\n// Save current state as latest\ncontext.set(lastKey, currentRegs);\n\n// If no registers changed, do not log (avoids spamming log file)\nif (diffs.length === 0) {\n    return null;\n}\n\n// -------------------------------------------------------------------------\n// 5. Construct log line for file & debug output\n// -------------------------------------------------------------------------\nconst diffSummaries = diffs.map(d => d.summary).join(\" | \");\nconst logLine = `${timeStamp} | [CONFIG CHANGED] ${blockName} via ${msgTypeDesc} [${diffs.length} change(s)]: ${diffSummaries}`;\n\nconst changedRegNumbers = diffs.map(d => `Reg ${d.register} (${d.oldValue}->${d.newValue})`).join(\", \");\nnode.status({ fill: \"red\", shape: \"dot\", text: `CHANGED: ${changedRegNumbers}` });\n\nmsg.payload = logLine;\nmsg.event = \"config_changed\";\nmsg.block = startReg;\nmsg.flag = assignedFlag;\nmsg.msgType = msgTypeDesc;\nmsg.diffs = diffs;\nmsg.registers = currentRegs;\n\nreturn msg;\n",
+        "func": "// =========================================================================\n// CONFIGURATION REGISTER CHANGE DETECTOR & LOGGER\n// Supports:\n// - FC 03 Read Responses: [01, 03, B4(180), ...]\n// - FC 16 Write Requests: [01, 10, Addr(2), Qty(2), ByteCount(180), ...]\n// Mapping:\n// - Reg 1001..1090 (3, 233) -> FLAG 2 (Block 1)\n// - Reg 1091..1180 (4, 67)  -> FLAG 4 (Block 2)\n// - Reg 1181..1270 (4, 157) -> FLAG 8 (Block 3)\n// =========================================================================\n\n// Handle manual baseline reset trigger\nif (msg.payload === \"reset_baseline\" || msg.payload === \"reset\") {\n    context.set(\"last_1001\", null);\n    context.set(\"last_1091\", null);\n    context.set(\"last_1181\", null);\n    node.status({ fill: \"blue\", shape: \"dot\", text: \"Baselines reset: Next packets will be stored as new baselines\" });\n    return null;\n}\n\nlet buf = msg.payload;\nif (!Buffer.isBuffer(buf)) {\n    if (Array.isArray(buf)) {\n        buf = Buffer.from(buf);\n    } else {\n        return null;\n    }\n}\n\n// Safety check: must target Slave 1\nif (buf.length < 5 || buf[0] !== 1) {\n    return null;\n}\n\nconst fc = buf[1];\nlet startReg = null;\nlet dataOffset = null;\nlet msgTypeDesc = \"\";\n\n// -------------------------------------------------------------------------\n// Case 1: FC 03 Read Response: [01, 03, B4(180), <180 data bytes>, CRC]\n// -------------------------------------------------------------------------\nif (fc === 3 && buf[2] === 180 && buf.length >= 183) {\n    dataOffset = 3;\n    msgTypeDesc = \"FC 03 Response\";\n\n    // Confirmation at payload offset 18 (byte 21 in buffer)\n    const conf = buf.readUInt16BE(21);\n    if (conf === 1001) {\n        startReg = 1001; // Flag 2\n    } else if (conf === 1091) {\n        startReg = 1091; // Flag 4\n    } else if (conf === 1181) {\n        startReg = 1181; // Flag 8\n    } else {\n        const lastReq = flow.get(\"last_requested_config_block\");\n        startReg = (lastReq === 1091 || lastReq === 1181) ? lastReq : 1001;\n    }\n}\n// -------------------------------------------------------------------------\n// Case 2: FC 16 Write Multiple: [01, 10, AddrHi, AddrLo, QtyHi, QtyLo, ByteCount(180), <180 data bytes>, CRC]\n// -------------------------------------------------------------------------\nelse if (fc === 16 && buf.length >= 187 && buf[6] === 180) {\n    let addr = buf.readUInt16BE(2);\n    if (addr === 1001 || addr === 1091 || addr === 1181) {\n        startReg = addr;\n    } else if (buf.length >= 27) {\n        const conf = buf.readUInt16BE(25); // Offset 18 in payload (7 + 18 = 25)\n        if (conf === 1001 || conf === 1091 || conf === 1181) {\n            startReg = conf;\n        }\n    }\n    if (startReg) {\n        dataOffset = 7;\n        msgTypeDesc = \"FC 16 Write\";\n    }\n}\n\nif (!startReg || dataOffset === null) {\n    return null;\n}\n\n// Block identification & Flag assignment:\n// - Start Reg 1001 (3, 233) -> Block 1 / FLAG 2\n// - Start Reg 1091 (4, 67)  -> Block 2 / FLAG 4\n// - Start Reg 1181 (4, 157) -> Block 3 / FLAG 8\nconst assignedFlag = (startReg === 1001) ? 2 : ((startReg === 1091) ? 4 : 8);\nconst blockNum = (startReg === 1001) ? 1 : ((startReg === 1091) ? 2 : 3);\nconst blockName = `Block ${blockNum} (Reg ${startReg}-${startReg + 89} / Flag ${assignedFlag})`;\n\n// -------------------------------------------------------------------------\n// 2. Parse all 90 registers (int16 Big-Endian)\n// -------------------------------------------------------------------------\nconst currentRegs = {};\nfor (let i = 0; i < 90; i++) {\n    const regNum = startReg + i;\n    currentRegs[regNum] = buf.readInt16BE(dataOffset + i * 2);\n}\n\n// Update memory in flow context as well\nconst flowKey = \"lcd_config_registers_block\" + blockNum;\nconst existingFlowRegs = flow.get(flowKey) || {};\nflow.set(flowKey, Object.assign({}, existingFlowRegs, currentRegs));\n\n// Track seen blocks for initialization\nlet seen = flow.get(\"lcd_blocks_seen\") || {};\nseen[startReg] = true;\nflow.set(\"lcd_blocks_seen\", seen);\nif (seen[1001] && seen[1091] && seen[1181]) {\n    flow.set(\"lcd_config_initialized\", true);\n    flow.set(\"lcd_sync_status\", \"initialized\");\n}\n\n// -------------------------------------------------------------------------\n// 3. Format clean timestamp: YYYY-MM-DD HH:mm:ss\n// -------------------------------------------------------------------------\nconst now = new Date();\nconst timeStamp = now.getFullYear() + \"-\" +\n    (\"0\" + (now.getMonth() + 1)).slice(-2) + \"-\" +\n    (\"0\" + now.getDate()).slice(-2) + \" \" +\n    (\"0\" + now.getHours()).slice(-2) + \":\" +\n    (\"0\" + now.getMinutes()).slice(-2) + \":\" +\n    (\"0\" + now.getSeconds()).slice(-2);\n\n// -------------------------------------------------------------------------\n// 4. Compare with last stored snapshot for this specific block\n// -------------------------------------------------------------------------\nconst lastKey = \"last_\" + startReg;\nconst lastRegs = context.get(lastKey);\n\n// CASE A: Initial Snapshot (First time this block is seen)\nif (!lastRegs) {\n    context.set(lastKey, currentRegs);\n\n    const nonZeros = [];\n    for (let r = startReg; r < startReg + 90; r++) {\n        if (currentRegs[r] !== 0) {\n            nonZeros.push(`Reg ${r}=${currentRegs[r]}`);\n        }\n    }\n\n    const baselineText = `${timeStamp} | [BASELINE STORED] ${blockName} via ${msgTypeDesc} (${nonZeros.length} non-zero): ${nonZeros.join(\", \")}`;\n    node.status({ fill: \"blue\", shape: \"dot\", text: `Baseline stored: Block ${blockNum} (Flag ${assignedFlag})` });\n\n    msg.payload = baselineText;\n    msg.event = \"baseline_stored\";\n    msg.block = startReg;\n    msg.flag = assignedFlag;\n    msg.msgType = msgTypeDesc;\n    msg.registers = currentRegs;\n    return msg;\n}\n\n// CASE B: Subsequent Snapshot (Detect changed registers)\nconst diffs = [];\nfor (let i = 0; i < 90; i++) {\n    const regNum = startReg + i;\n    const oldVal = lastRegs[regNum];\n    const newVal = currentRegs[regNum];\n\n    if (oldVal !== newVal) {\n        const diffVal = newVal - oldVal;\n        const diffStr = diffVal > 0 ? `+${diffVal}` : `${diffVal}`;\n        const oldHex = \"0x\" + (oldVal & 0xFFFF).toString(16).toUpperCase().padStart(4, \"0\");\n        const newHex = \"0x\" + (newVal & 0xFFFF).toString(16).toUpperCase().padStart(4, \"0\");\n\n        diffs.push({\n            register: regNum,\n            oldValue: oldVal,\n            newValue: newVal,\n            diff: diffVal,\n            diffString: diffStr,\n            oldHex: oldHex,\n            newHex: newHex,\n            summary: `Reg ${regNum}: ${oldVal} -> ${newVal} (Diff: ${diffStr} | Hex: ${oldHex}->${newHex})`\n        });\n    }\n}\n\n// Save current state as latest\ncontext.set(lastKey, currentRegs);\n\n// If no registers changed, do not log (avoids spamming log file)\nif (diffs.length === 0) {\n    return null;\n}\n\n// -------------------------------------------------------------------------\n// 5. Construct log line for file & debug output\n// -------------------------------------------------------------------------\nconst diffSummaries = diffs.map(d => d.summary).join(\" | \");\nconst logLine = `${timeStamp} | [CONFIG CHANGED] ${blockName} via ${msgTypeDesc} [${diffs.length} change(s)]: ${diffSummaries}`;\n\nconst changedRegNumbers = diffs.map(d => `Reg ${d.register} (${d.oldValue}->${d.newValue})`).join(\", \");\nnode.status({ fill: \"red\", shape: \"dot\", text: `CHANGED: ${changedRegNumbers}` });\n\nmsg.payload = logLine;\nmsg.event = \"config_changed\";\nmsg.block = startReg;\nmsg.flag = assignedFlag;\nmsg.msgType = msgTypeDesc;\nmsg.diffs = diffs;\nmsg.registers = currentRegs;\n\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1710,
-        "y": 720,
+        "x": 1650,
+        "y": 740,
         "wires": [
             [
                 "debug_config_diff_01",
@@ -2412,8 +2494,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 2130,
-        "y": 700,
+        "x": 2070,
+        "y": 720,
         "wires": []
     },
     {
@@ -2427,8 +2509,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 2120,
-        "y": 740,
+        "x": 2060,
+        "y": 760,
         "wires": [
             []
         ]
@@ -2450,8 +2532,8 @@
         "topic": "",
         "payload": "",
         "payloadType": "date",
-        "x": 1870,
-        "y": 800,
+        "x": 1810,
+        "y": 820,
         "wires": [
             [
                 "file_delete_config_log_01"
@@ -2469,8 +2551,8 @@
         "createDir": false,
         "overwriteFile": "delete",
         "encoding": "none",
-        "x": 2120,
-        "y": 800,
+        "x": 2060,
+        "y": 820,
         "wires": [
             []
         ]
@@ -2492,13 +2574,49 @@
         "topic": "",
         "payload": "reset_baseline",
         "payloadType": "str",
-        "x": 1600,
-        "y": 780,
+        "x": 1540,
+        "y": 800,
         "wires": [
             [
                 "func_config_diff_logger_01"
             ]
         ]
+    },
+    {
+        "id": "c8871d435b1846bc",
+        "type": "debug",
+        "z": "1c00011a6f22edfe",
+        "name": "debug 22",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 2200,
+        "y": 880,
+        "wires": []
+    },
+    {
+        "id": "f70e4411e3f9f81b",
+        "type": "comment",
+        "z": "1c00011a6f22edfe",
+        "name": "flag 8",
+        "info": "1191 teplota bojler 500 = 50 °C",
+        "x": 630,
+        "y": 1160,
+        "wires": []
+    },
+    {
+        "id": "f6908e58d6fc44a4",
+        "type": "comment",
+        "z": "1c00011a6f22edfe",
+        "name": "flag 2",
+        "info": "0x1011 0-off 1-on\n0x1012 režim: 0-jen bojler,3-bojler a topení",
+        "x": 630,
+        "y": 1120,
+        "wires": []
     },
     {
         "id": "7450e794f0202cde",
@@ -2566,7 +2684,7 @@
         "sessionExpiry": ""
     },
     {
-        "id": "8bb291211a60ee0a",
+        "id": "5f7f9177782b228a",
         "type": "global-config",
         "env": [],
         "modules": {
@@ -2575,5 +2693,207 @@
             "node-red-contrib-lvin-crc16": "1.0.2",
             "node-red-contrib-buffer-parser": "3.2.2"
         }
+    },
+    {
+        "id": "inject_modify_config_flag4_01",
+        "type": "inject",
+        "z": "1c00011a6f22edfe",
+        "name": "Příklad: Změna parametrů (Flag 4 / Block 2 - Reg 1101: 150, 1102: 250)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{\"1101\":150,\"1102\":250}",
+        "payloadType": "json",
+        "x": 460,
+        "y": 1180,
+        "wires": [
+            [
+                "lcd_config_manager_01"
+            ]
+        ]
+    },
+    {
+        "id": "inject_manual_flag_128_01",
+        "type": "inject",
+        "z": "1c00011a6f22edfe",
+        "name": "Manuální vyčtení všech parametrů (Flag 128 / 0x8000)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "read_all",
+        "payloadType": "str",
+        "x": 400,
+        "y": 1320,
+        "wires": [
+            [
+                "lcd_config_manager_01"
+            ]
+        ]
+    },
+    {
+        "id": "comment_ha_mqtt_config_01",
+        "type": "comment",
+        "z": "1c00011a6f22edfe",
+        "name": "=== HOME ASSISTANT MQTT CONFIGURATION BRIDGE (Reg 1191 & Future) ===",
+        "info": "Provides bidirectional MQTT discovery, retained state publishing, and command reception for heat pump configuration registers.",
+        "x": 350,
+        "y": 1400,
+        "wires": []
+    },
+    {
+        "id": "mqtt_in_ha_config_cmd_01",
+        "type": "mqtt in",
+        "z": "1c00011a6f22edfe",
+        "name": "HA Config Set (MQTT In)",
+        "topic": "nodered/heatpump/nodered_heatpump_001/config/+/set",
+        "qos": "0",
+        "datatype": "utf8",
+        "broker": "69189174c80ee98f",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 230,
+        "y": 1460,
+        "wires": [
+            [
+                "func_process_ha_config_cmd_01"
+            ]
+        ]
+    },
+    {
+        "id": "func_process_ha_config_cmd_01",
+        "type": "function",
+        "z": "1c00011a6f22edfe",
+        "name": "Process HA Config Command",
+        "func": "// --- Process incoming configuration change from Home Assistant ---\n// Topic format: nodered/heatpump/nodered_heatpump_001/config/<reg>/set\n// Payload: \"ON\", \"OFF\", \"Heating\", \"50.0\", \"52\", etc.\nconst topic = msg.topic || \"\";\nconst match = topic.match(/\\/config\\/(\\d+)\\/set$/);\n\nif (!match) {\n    node.warn(`Invalid HA config set topic: ${topic}`);\n    return null;\n}\n\nconst reg = parseInt(match[1], 10);\nconst registry = flow.get(\"hp_config_registry\") || {};\nconst def = registry[reg];\n\nif (!def) {\n    node.warn(`Received command for unmapped register: ${reg}`);\n    return null;\n}\n\n// Safety guard: Must be initialized via Flag 128\nconst isInitialized = flow.get(\"lcd_config_initialized\") === true;\nif (!isInitialized) {\n    node.warn(`Change for Reg ${reg} blocked: Parameters not read out via Flag 128 yet!`);\n    node.status({ fill: \"red\", shape: \"ring\", text: `Blocked Reg ${reg}: wait Flag 128` });\n    return null;\n}\n\nconst rawPayload = (msg.payload !== undefined && msg.payload !== null) ? msg.payload.toString().trim() : \"\";\nlet rawVal = 0;\nlet displayVal = rawPayload;\n\nif (def.component === \"switch\") {\n    const upper = rawPayload.toUpperCase();\n    if (upper === \"ON\" || upper === \"1\" || upper === \"TRUE\") {\n        rawVal = 1;\n        displayVal = \"ON\";\n    } else if (upper === \"OFF\" || upper === \"0\" || upper === \"FALSE\") {\n        rawVal = 0;\n        displayVal = \"OFF\";\n    } else {\n        node.warn(`Invalid switch payload for Reg ${reg} (${def.key}): \"${rawPayload}\"`);\n        return null;\n    }\n} else if (def.component === \"select\") {\n    const options = def.options || [];\n    const optIdx = options.findIndex(o => o.toLowerCase() === rawPayload.toLowerCase());\n    if (optIdx !== -1) {\n        rawVal = optIdx;\n        displayVal = options[optIdx];\n    } else {\n        const parsedIdx = parseInt(rawPayload, 10);\n        if (!isNaN(parsedIdx) && parsedIdx >= 0 && parsedIdx < options.length) {\n            rawVal = parsedIdx;\n            displayVal = options[parsedIdx];\n        } else {\n            node.warn(`Invalid select payload for Reg ${reg} (${def.key}): \"${rawPayload}\". Options: ${options.join(\", \")}`);\n            return null;\n        }\n    }\n} else {\n    // Number component (default)\n    let userVal = parseFloat(rawPayload);\n    if (isNaN(userVal)) {\n        node.warn(`Invalid numeric payload for Reg ${reg} (${def.key}): \"${rawPayload}\"`);\n        return null;\n    }\n\n    // Clamp to configured min/max\n    if (def.min !== undefined && userVal < def.min) userVal = def.min;\n    if (def.max !== undefined && userVal > def.max) userVal = def.max;\n\n    // Convert to raw Modbus register integer\n    const scale = def.scale || 1;\n    rawVal = Math.round(userVal / scale);\n    displayVal = userVal;\n}\n\n// Map register to appropriate Flag / Block:\n// - Block 1: Reg 1001..1090 -> Flag 2\n// - Block 2: Reg 1091..1180 -> Flag 4\n// - Block 3: Reg 1181..1270 -> Flag 8\nlet determinedFlag = 2;\nif (reg >= 1001 && reg <= 1090) {\n    determinedFlag = 2;\n} else if (reg >= 1091 && reg <= 1180) {\n    determinedFlag = 4;\n} else if (reg >= 1181 && reg <= 1270) {\n    determinedFlag = 8;\n}\n\nnode.status({ fill: \"green\", shape: \"dot\", text: `Set Reg ${reg} (${def.key}) = ${displayVal} (Raw: ${rawVal}, Flag: ${determinedFlag})` });\n\n// Pass to lcd_config_manager_01\nreturn {\n    payload: {\n        [reg]: rawVal\n    },\n    flag: determinedFlag,\n    source: \"homeassistant\",\n    userValue: displayVal,\n    register: reg\n};\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 520,
+        "y": 1460,
+        "wires": [
+            [
+                "lcd_config_manager_01",
+                "debug_ha_config_cmd_01"
+            ]
+        ]
+    },
+    {
+        "id": "debug_ha_config_cmd_01",
+        "type": "debug",
+        "z": "1c00011a6f22edfe",
+        "name": "HA Config Command Parsed",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 820,
+        "y": 1460,
+        "wires": []
+    },
+    {
+        "id": "inject_publish_config_state_01",
+        "type": "inject",
+        "z": "1c00011a6f22edfe",
+        "name": "Publish Config to HA (MQTT)",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "12",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 230,
+        "y": 1540,
+        "wires": [
+            [
+                "func_publish_ha_config_01"
+            ]
+        ]
+    },
+    {
+        "id": "func_publish_ha_config_01",
+        "type": "function",
+        "z": "1c00011a6f22edfe",
+        "name": "Publish Config to MQTT (State)",
+        "func": "// --- Publish Heat Pump Configuration Registers to MQTT State ---\nconst baseTopic = \"nodered/heatpump\";\nconst deviceIdentifier = \"nodered_heatpump_001\";\nconst configStateTopic = `${baseTopic}/${deviceIdentifier}/config_state`;\n\n// Ordered list from flow context to guarantee logical priority order (all 109 parameters)\nconst list = flow.get(\"hp_config_list\") || [];\n\n// Check if configuration has been read out from Master via Flag 128\nconst isInit = flow.get(\"lcd_config_initialized\") === true;\nif (!isInit) {\n    node.status({ fill: \"yellow\", shape: \"ring\", text: \"Waiting for Flag 128 init before publishing\" });\n    return null;\n}\n\nconst b1 = flow.get(\"lcd_config_registers_block1\") || {};\nconst b2 = flow.get(\"lcd_config_registers_block2\") || {};\nconst b3 = flow.get(\"lcd_config_registers_block3\") || {};\n\nconst statePayload = {};\nlet count = 0;\n\nfor (const def of list) {\n    const reg = def.reg;\n    let raw = null;\n    if (reg >= 1001 && reg <= 1090) {\n        raw = b1[reg];\n    } else if (reg >= 1091 && reg <= 1180) {\n        raw = b2[reg];\n    } else if (reg >= 1181 && reg <= 1270) {\n        raw = b3[reg];\n    }\n\n    if (raw !== undefined && raw !== null) {\n        if (def.component === \"switch\") {\n            const isStateOn = (raw === 1 || raw === \"1\" || raw === true);\n            const stateStr = isStateOn ? \"ON\" : \"OFF\";\n            statePayload[def.key] = stateStr;\n            statePayload[def.key + \"_num\"] = isStateOn ? 1 : 0;\n        } else if (def.component === \"select\") {\n            const options = def.options || [];\n            const optName = options[raw] !== undefined ? options[raw] : (\"Option \" + raw);\n            statePayload[def.key] = raw;\n            statePayload[def.key + \"_name\"] = optName;\n        } else {\n            // Number component\n            const scale = def.scale || 1;\n            const scaledVal = parseFloat((raw * scale).toFixed(2));\n            statePayload[def.key] = scaledVal;\n        }\n        count++;\n    }\n}\n\nif (count === 0) {\n    node.status({ fill: \"yellow\", shape: \"ring\", text: \"No registers loaded yet\" });\n    return null;\n}\n\nnode.status({ fill: \"green\", shape: \"dot\", text: `Published ${count} config values to HA` });\n\nreturn {\n    topic: configStateTopic,\n    payload: JSON.stringify(statePayload),\n    retain: true\n};\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 530,
+        "y": 1540,
+        "wires": [
+            [
+                "mqtt_out_ha_config_01",
+                "debug_ha_config_state_01"
+            ]
+        ]
+    },
+    {
+        "id": "mqtt_out_ha_config_01",
+        "type": "mqtt out",
+        "z": "1c00011a6f22edfe",
+        "name": "HA Config State (MQTT Out)",
+        "topic": "",
+        "qos": "",
+        "retain": "true",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "69189174c80ee98f",
+        "x": 820,
+        "y": 1540,
+        "wires": []
+    },
+    {
+        "id": "debug_ha_config_state_01",
+        "type": "debug",
+        "z": "1c00011a6f22edfe",
+        "name": "Config State Published (MQTT)",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 830,
+        "y": 1600,
+        "wires": []
     }
 ]
