@@ -120,11 +120,9 @@ class NordlineDailyWritesSensor(NordlineHeatPumpEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return write limit attributes."""
+        """Return write counter attributes."""
         return {
-            "daily_safe_limit": 20,
             "date": self._hub.daily_write_date,
-            "remaining_writes": max(0, 20 - self._hub.daily_write_count),
         }
 
 

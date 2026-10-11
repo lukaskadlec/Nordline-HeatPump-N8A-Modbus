@@ -115,7 +115,7 @@ The native custom component (`custom_components/nordline_heatpump`) connects dir
 - **Native Thermostat**: Unified `climate` entity (`Thermostat`) with Heating, Cooling, and Off modes + target setpoint slider.
 - **All 109 Registers & 42 Telemetry Sensors**: Automatically creates entities for all parameters.
 - **Built-in 10-Second Watchdog**: Auto-detects physical LCD silence and seamlessly takes over.
-- **Hardware Lifespan Guard**: Built-in daily write limiter enforcing the safe **20 writes/day** ceiling.
+- **Daily EEPROM Writes Tracking**: Real-time diagnostic sensor monitoring non-volatile memory write operations.
 
 ### Installation via HACS (Recommended):
 1. In Home Assistant, open **HACS** -> **Integrations**.

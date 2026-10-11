@@ -14,7 +14,6 @@ from .const import (
     CONFIG_REGISTERS_BY_KEY,
     CONFIG_REGISTERS_BY_REG,
     DOMAIN,
-    MAX_DAILY_WRITES,
     TELEMETRY_DECODER_ITEMS,
     TELEMETRY_SENSORS_META,
 )
@@ -77,7 +76,7 @@ class NordlineHeatPumpHub:
         self.last_lcd_reply_time = time.time()  # Start with 10s grace period
         self.pending_event_flag = 0x8000  # Queue Flag 128 on startup
 
-        # Safety: EEPROM daily write endurance counter (max 20 writes/day)
+        # Diagnostic: EEPROM daily write endurance counter
         self.daily_write_count = 0
         self.daily_write_date = date.today().isoformat()
 
@@ -439,19 +438,11 @@ class NordlineHeatPumpHub:
             _LOGGER.error("Register %d is not defined in configuration specification.", reg)
             return False
 
-        # --- EEPROM LIFESPAN & DAILY WRITE LIMIT GUARD (Max 20 writes/day) ---
+        # --- EEPROM DAILY WRITE TRACKER ---
         today = date.today().isoformat()
         if self.daily_write_date != today:
             self.daily_write_date = today
             self.daily_write_count = 0
-
-        if self.daily_write_count >= MAX_DAILY_WRITES:
-            _LOGGER.warning(
-                "CRITICAL: Daily EEPROM write limit reached (%d/%d writes today)! "
-                "Write to Register %d was BLOCKED to preserve heat pump microcontroller lifespan.",
-                self.daily_write_count, MAX_DAILY_WRITES, reg
-            )
-            return False
 
         meta = CONFIG_REGISTERS_BY_REG[reg]
         key = meta["key"]
@@ -482,9 +473,10 @@ class NordlineHeatPumpHub:
         # Increment daily write counter
         self.daily_write_count += 1
         _LOGGER.info(
-            "Writing Register %d (%s) -> Raw: %d (Friendly: %s). Daily write count: %d/%d.",
-            reg, meta["name"], raw_val, value, self.daily_write_count, MAX_DAILY_WRITES
+            "Writing Register %d (%s) -> Raw: %d (Friendly: %s). Daily write count: %d.",
+            reg, meta["name"], raw_val, value, self.daily_write_count
         )
+        self._notify_callbacks()
 
         # Update in-memory 180-byte block and queue synchronization flag
         if 1001 <= reg <= 1090:

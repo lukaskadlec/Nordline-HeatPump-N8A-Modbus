@@ -10,9 +10,6 @@ DEFAULT_SERIAL_PORT = "/dev/ttyUSB-TC"
 DEFAULT_BAUDRATE = 9600
 DEFAULT_NAME = "Nordline Heat Pump"
 
-# Safety limits: Protect non-volatile EEPROM memory from wear
-MAX_DAILY_WRITES = 20
-
 # Modbus slave ID and function codes
 SLAVE_ID = 1
 FC_READ_HOLDING = 3
