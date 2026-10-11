@@ -12,6 +12,16 @@ This project offers two implementation paths:
 
 ---
 
+> [!WARNING]
+> ### ⚠️ IMPORTANT WARNING: Heat Pump Lifespan & EEPROM Write Endurance
+> **Recommended safe daily limit: maximum ~20 writes per day!**
+> 
+> The main microcontroller on the **PC8002 PCB** stores all configuration parameter changes (target heating, cooling, and hot water setpoints, operating modes, timers, and service registers) directly into non-volatile **EEPROM** memory. EEPROM chips have a physically finite endurance cycle (typically 100,000 to 1,000,000 write operations per cell before irreversible hardware failure occurs).
+> 
+> - **Hardware Protection**: Keeping parameter changes under **~20 writes/day** guarantees decades of safe operational lifespan.
+> - **Warning for Automations**: **Never create high-frequency automation loops** in Home Assistant (e.g., dynamically updating target temperatures every minute based on spot electricity prices, minor room thermostat fluctuations, or outdoor temperature drift).
+> - **Best Practices**: Use hysteresis, batch parameter adjustments, and alter setpoints only during major schedule shifts (e.g., eco/comfort transitions 2–4 times a day).
+
 ---
 
 ## Table of Contents
@@ -220,6 +230,15 @@ Entities are structured so they sort logically on Home Assistant device cards:
    - Bidirectional writes from Home Assistant are **blocked** until all registers are populated in memory, preventing accidental overwrite of parameters with zeroed defaults.
 3. **Checksum & Framing Validation**:
    - Every received frame is verified with Modbus CRC-16 before decoding or routing.
+4. **Configuration Register Write Limits & EEPROM Protection**:
+   > [!WARNING]
+   > **Recommended daily ceiling: maximum ~20 writes per day**
+   > 
+   > The PC8002 PCB microcontroller writes all settings changes directly to internal non-volatile **EEPROM**. Because EEPROM cells endure a limited number of write cycles (typically 100,000 to 1,000,000 writes per memory cell):
+   > 
+   > - **Lifespan Protection**: Restricting daily adjustments to approximately 20 writes ensures decades of reliable hardware service.
+   > - **Automation Caution**: Do not bind heat pump setpoints directly to real-time spot electricity price feeds or aggressive PID controllers that push changes every few seconds or minutes.
+   > - **Recommended Usage**: Utilize built-in schedules, apply temperature hysteresis, and group setting updates into daily mode transitions (e.g., night setback vs daytime comfort 2–4 times a day).
 
 ---
 
