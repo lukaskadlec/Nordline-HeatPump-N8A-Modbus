@@ -158,6 +158,7 @@ class NordlineHeatPumpHub:
                 )
                 self._writer = writer
                 _LOGGER.info("Serial connection established successfully on %s", self.serial_port)
+                self._notify_callbacks()
 
                 # Reset 10s grace period on connection
                 self.last_lcd_reply_time = time.time()
@@ -191,12 +192,32 @@ class NordlineHeatPumpHub:
                     except Exception:
                         pass
                     self._writer = None
+                    self._notify_callbacks()
 
     def _process_frame(self, frame: bytes) -> None:
-        """Process and route received Modbus RTU frames."""
-        if not verify_crc16(frame):
+        """Process and route received Modbus RTU frames with stream-slicing fallback."""
+        if verify_crc16(frame):
+            self._route_frame(frame)
             return
 
+        # Slicer fallback: scan for valid CRC frames in buffer (handles noise or concatenated frames)
+        if len(frame) >= 5:
+            offset = 0
+            while offset <= len(frame) - 5:
+                matched = False
+                for length in (189, 47, 8, 11, 5):
+                    if offset + length <= len(frame):
+                        candidate = frame[offset:offset + length]
+                        if verify_crc16(candidate):
+                            self._route_frame(candidate)
+                            offset += length
+                            matched = True
+                            break
+                if not matched:
+                    offset += 1
+
+    def _route_frame(self, frame: bytes) -> None:
+        """Route verified Modbus frame by header and length."""
         # 1. Master Broadcast Part A (00 16 07 D1 ... 180 bytes telemetry)
         if len(frame) == 189 and frame[0] == 0x00 and frame[1] == 0x10 and frame[2] == 0x07 and frame[3] == 0xD1:
             self._decode_telemetry_part_a(frame)
@@ -264,10 +285,14 @@ class NordlineHeatPumpHub:
                     val = struct.unpack_from(">H", frame, offset)[0]
                     if scale == "/10":
                         val = round(val / 10.0, 1)
-                elif itype == "bit":
+                elif itype in ("bool", "bit"):
                     byte_val = frame[offset]
-                    mask = item.get("mask", 1)
-                    val = 1 if (byte_val & mask) != 0 else 0
+                    if "offsetbit" in item:
+                        bit = item["offsetbit"]
+                        val = 1 if ((byte_val >> bit) & 1) != 0 else 0
+                    else:
+                        mask = item.get("mask", 1)
+                        val = 1 if (byte_val & mask) != 0 else 0
                 elif itype == "int8":
                     val = struct.unpack_from(">b", frame, offset)[0]
                 elif itype == "uint8":

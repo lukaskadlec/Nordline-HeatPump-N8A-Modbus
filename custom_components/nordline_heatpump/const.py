@@ -403,92 +403,92 @@ TELEMETRY_DECODER_ITEMS: list[dict[str, Any]] = [
 # Telemetry Home Assistant sensor metadata
 TELEMETRY_SENSORS_META: dict[str, dict[str, Any]] = {
     "Teplota vstup": {
-        "unit": "°°C",
-        "dev°Class": "temperature",
+        "unit": "°C",
+        "devClass": "temperature",
         "name": "[Temp] Water - Inlet",
         "icon": "mdi:thermometer-chevron-down"
     },
     "Teplota vystup": {
-        "unit": "°°C",
-        "dev°Class": "temperature",
+        "unit": "°C",
+        "devClass": "temperature",
         "name": "[Temp] Water - Outlet",
         "icon": "mdi:thermometer-chevron-up"
     },
     "Teplota vytlak": {
-        "unit": "°°C",
-        "dev°Class": "temperature",
+        "unit": "°C",
+        "devClass": "temperature",
         "name": "[Temp] Refrig - Discharge",
         "icon": "mdi:thermometer-alert"
     },
     "Teplota bojler": {
-        "unit": "°°C",
-        "dev°Class": "temperature",
+        "unit": "°C",
+        "devClass": "temperature",
         "name": "[Temp] Water - Boiler",
         "icon": "mdi:water-boiler"
     },
     "Teplota sani": {
-        "unit": "°°C",
-        "dev°Class": "temperature",
+        "unit": "°C",
+        "devClass": "temperature",
         "name": "[Temp] Refrig - Suction",
         "icon": "mdi:thermometer-low"
     },
     "Teplota vyparnik": {
-        "unit": "°°C",
-        "dev°Class": "temperature",
+        "unit": "°C",
+        "devClass": "temperature",
         "name": "[Temp] Refrig - Evaporator",
         "icon": "mdi:snowflake-thermometer"
     },
     "Teplota okoli": {
-        "unit": "°°C",
-        "dev°Class": "temperature",
+        "unit": "°C",
+        "devClass": "temperature",
         "name": "[Temp] System - Ambient",
         "icon": "mdi:thermometer"
     },
     "Teplota invertoru": {
-        "unit": "°°C",
-        "dev°Class": "temperature",
+        "unit": "°C",
+        "devClass": "temperature",
         "name": "[Temp] System - Inverter",
         "icon": "mdi:chip"
     },
     "Hodnota ochrane teploty modulu": {
-        "unit": "°°C",
-        "dev°Class": "temperature",
+        "unit": "°C",
+        "devClass": "temperature",
         "name": "[Temp] System - Module Protection",
         "icon": "mdi:shield-alert"
     },
     "Prehrati sani": {
-        "unit": "°°C",
-        "dev°Class": "temperature",
+        "unit": "°C",
+        "devClass": "temperature",
         "name": "[Temp] Refrig - Superheat Suction",
         "icon": "mdi:thermometer-lines"
     },
     "Prehrati vytlak": {
-        "unit": "°°C",
-        "dev°Class": "temperature",
+        "unit": "°C",
+        "devClass": "temperature",
         "name": "[Temp] Refrig - Superheat Discharge",
         "icon": "mdi:thermometer-lines"
     },
     "Tlak sani": {
         "unit": "bar",
-        "dev°Class": "pressure",
+        "devClass": "pressure",
         "name": "[Pressure] Refrig - Suction Pressure",
         "icon": "mdi:gauge-low"
     },
     "Tlak vytlak": {
         "unit": "bar",
-        "dev°Class": "pressure",
+        "devClass": "pressure",
         "name": "[Pressure] Refrig - Discharge Pressure",
         "icon": "mdi:gauge"
     },
     "Frekvence nastavena": {
         "unit": "Hz",
-        "dev°Class": "frequency",
+        "devClass": "frequency",
         "name": "[System] Status - Freq Set",
         "icon": "mdi:sine-wave"
     },
     "Frekvence skutecna": {
         "unit": "Hz",
-        "dev°Class": "frequency",
+        "devClass": "frequency",
         "name": "[System] Status - Freq Actual",
         "icon": "mdi:sine-wave"
     },
@@ -502,33 +502,33 @@ TELEMETRY_SENSORS_META: dict[str, dict[str, Any]] = {
         "icon": "mdi:fan",
         "name": "[Fan] Motor - Speed Set"
     },
-    "A°C vstupni napeti": {
+    "AC vstupni napeti": {
         "unit": "V",
-        "dev°Class": "voltage",
-        "name": "[Electrical] A°C - Input Voltage",
+        "devClass": "voltage",
+        "name": "[Electrical] AC - Input Voltage",
         "icon": "mdi:lightning-bolt"
     },
     "Napeti sbernice": {
         "unit": "V",
-        "dev°Class": "voltage",
-        "name": "[Electrical] D°C - Bus Voltage",
+        "devClass": "voltage",
+        "name": "[Electrical] DC - Bus Voltage",
         "icon": "mdi:flash"
     },
-    "A°C vstupni proud": {
+    "AC vstupni proud": {
         "unit": "A",
-        "dev°Class": "current",
-        "name": "[Electrical] A°C - Input °Current",
+        "devClass": "current",
+        "name": "[Electrical] AC - Input Current",
         "icon": "mdi:current-ac"
     },
     "Fazovy proud kompresoru": {
         "unit": "A",
-        "dev°Class": "current",
-        "name": "[Electrical] °Comp - °Compressor °Current",
+        "devClass": "current",
+        "name": "[Electrical] Comp - Compressor Current",
         "icon": "mdi:current-ac"
     },
-    "°Compressor (O01)": {
+    "Compressor (O01)": {
         "component": "binary_sensor",
-        "name": "[Output] O01 °Compressor",
+        "name": "[Output] O01 Compressor",
         "icon": "mdi:air-conditioner"
     },
     "Water Pump (O02)": {
@@ -551,9 +551,9 @@ TELEMETRY_SENSORS_META: dict[str, dict[str, Any]] = {
         "name": "[Output] O06 Antifreeze Heat Strip",
         "icon": "mdi:heating-coil"
     },
-    "°Crank Antifreeze Heating Strip (O07)": {
+    "Crank Antifreeze Heating Strip (O07)": {
         "component": "binary_sensor",
-        "name": "[Output] O07 °Crankcase Heat Strip",
+        "name": "[Output] O07 Crankcase Heat Strip",
         "icon": "mdi:heating-coil"
     },
     "Spray Valve (O08)": {
@@ -568,8 +568,8 @@ TELEMETRY_SENSORS_META: dict[str, dict[str, Any]] = {
     },
     "Alarm (O11)": {
         "component": "binary_sensor",
-        "dev°Class": "problem",
-        "entity°Category": "diagnostic",
+        "devClass": "problem",
+        "entityCategory": "diagnostic",
         "name": "[Output] O11 Alarm Output",
         "icon": "mdi:alert-circle"
     },
@@ -597,29 +597,29 @@ TELEMETRY_SENSORS_META: dict[str, dict[str, Any]] = {
     },
     "High Pressure Alarm (S01)": {
         "component": "binary_sensor",
-        "dev°Class": "problem",
-        "entity°Category": "diagnostic",
+        "devClass": "problem",
+        "entityCategory": "diagnostic",
         "name": "[Alarm] S01 High Pressure",
         "icon": "mdi:gauge-full"
     },
     "Low Pressure Alarm (S02)": {
         "component": "binary_sensor",
-        "dev°Class": "problem",
-        "entity°Category": "diagnostic",
+        "devClass": "problem",
+        "entityCategory": "diagnostic",
         "name": "[Alarm] S02 Low Pressure",
         "icon": "mdi:gauge-empty"
     },
     "Water Flow Alarm (S03)": {
         "component": "binary_sensor",
-        "dev°Class": "problem",
-        "entity°Category": "diagnostic",
+        "devClass": "problem",
+        "entityCategory": "diagnostic",
         "name": "[Alarm] S03 Water Flow",
         "icon": "mdi:water-alert"
     },
     "Emergency Switch Alarm (S04)": {
         "component": "binary_sensor",
-        "dev°Class": "problem",
-        "entity°Category": "diagnostic",
+        "devClass": "problem",
+        "entityCategory": "diagnostic",
         "name": "[Alarm] S04 Emergency Switch",
         "icon": "mdi:alert-octagon"
     },
@@ -630,14 +630,14 @@ TELEMETRY_SENSORS_META: dict[str, dict[str, Any]] = {
     },
     "Heater Overload Alarm (S07)": {
         "component": "binary_sensor",
-        "dev°Class": "problem",
-        "entity°Category": "diagnostic",
+        "devClass": "problem",
+        "entityCategory": "diagnostic",
         "name": "[Alarm] S07 Heater Overload",
         "icon": "mdi:heat-wave"
     },
     "Alarm detail": {
-        "entity°Category": "diagnostic",
-        "name": "[Alarm] Detail - °Code",
+        "entityCategory": "diagnostic",
+        "name": "[Alarm] Detail - Code",
         "icon": "mdi:alert-circle-outline"
     }
 }
