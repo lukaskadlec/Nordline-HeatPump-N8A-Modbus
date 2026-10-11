@@ -64,6 +64,51 @@ Menu Passwords on LCD Controller:
 - Code "022" or "22" : User / I/O Status Inspection Access 
 
 
+--------------------------------------------------------------------------------
+2.1 HOME ASSISTANT MQTT DISCOVERY NAMING & SORTING TAXONOMY
+--------------------------------------------------------------------------------
+To ensure logical grouping and alphabetical sorting on Home Assistant device cards,
+all 109 configuration registers and 41 status/telemetry sensors follow a structured
+taxonomy:
+
+1. Primary Controls (21 user-facing control entities in HA "Controls" card):
+   Clean display names without bracket tags:
+   - Power State (switch.hp_power_state)
+   - Operating Mode (select.hp_operating_mode)
+   - Heating Setpoint (number.hp_heating_setpoint)
+   - Hot Water Setpoint (number.hp_hot_water_setpoint)
+   - Cooling Setpoint (number.hp_cooling_setpoint)
+   - Timer 1 (ON) Enable / Hour / Minute (switch.hp_timer_1_on_enable, etc.)
+   - Timer 2 (OFF) Enable / Hour / Minute (switch.hp_timer_2_off_enable, etc.)
+   - Fast Mute (switch.hp_fast_mute)
+   - Mute Timer Enable / Start / End (switch.hp_mute_timer_enable, etc.)
+   - Electric Heater (switch.hp_electric_heater)
+   - Pump Running Mode / Interval / Duration (select.hp_pump_running_mode, etc.)
+
+2. Advanced Configuration (88 registers in HA "Configuration" card):
+   Format: "[Group] Sub - ID Name"
+   - [System]  : General, Network, Unit, Valve, Inverter, Model
+   - [Protect] : Antifreeze, Limits, Valve
+   - [Fan]     : Heating, Cooling, Manual, Mute, Motor
+   - [Defrost] : Exit, Cycle, Sliding, Heater, Comp
+   - [EEV]     : Mode, Heat, Initial, Defrost, Cool, Timing, PID, Manual
+   - [Disinf]  : Target, Schedule
+   - [Pump]    : Timing, Manual
+   - [Temp]    : Diff, Limit, Heater, Curve
+   Entity IDs (object_id): hp_<slug> (e.g. number.hp_temp_curve_r17_compensation_on_low_at)
+
+3. Status & Telemetry Sensors (41 entities in HA "Sensors" and "Diagnostic" cards):
+   Format: "[Group] Sub - Name / ID"
+   - [Temp]       : Water (Inlet, Outlet, Boiler), Refrig (Suction, Discharge, Evaporator, Superheat), System (Ambient, Inverter, Module Protection)
+   - [Pressure]   : Refrig (Suction Pressure, Discharge Pressure)
+   - [Electrical] : AC (Voltage, Current), DC (Bus Voltage), Comp (Compressor Current)
+   - [Fan]        : Motor (Speed, Speed Set)
+   - [EEV]        : Valve (Steps)
+   - [System]     : Status (Freq Set, Freq Actual, Power ON/OFF)
+   - [Output]     : Digital Relays O01 .. O13
+   - [Alarm]      : Diagnostic & Safety S01 .. S07, Detail (Code)
+
+
 ================================================================================
 3. DETAILED REGISTER SPECIFICATION
 ================================================================================
@@ -333,19 +378,19 @@ Reg  | Modbus Hex | Block (Flag)   | UI Parameter Name           | Allowed Value
 1031 | 0x03FF     | Block 1 (0x02) | Electric Heater (H14)       | 0 = Off, 1 = On                                         | 1     | 1    | -    | Toggle Switch            | switch.hp_electric_heater      
 1074 | 0x0432     | Block 1 (0x02) | Fast Mute (Quiet Mode)      | 0 = Off, 1 = On (Active 8h)                             | 1     | 1    | -    | Toggle Switch            | switch.hp_fast_mute            
 1068 | 0x042C     | Block 1 (0x02) | Mute Timer (F10)            | 0 = Off (No), 1 = On (Yes)                              | 1     | 1    | -    | Toggle Switch            | switch.hp_mute_timer_enable    
-1069 | 0x042D     | Block 1 (0x02) | Mute Timer Start Hour (F11) | 0 .. 23                                                 | 1     | 1    | h    | Number Box / Time (HH)   | number.hp_mute_start_hour      
-1261 | 0x04ED     | Block 3 (0x08) | Mute Timer Start Min        | 0 .. 59                                                 | 1     | 1    | min  | Number Box / Time (MM)   | number.hp_mute_start_minute    
-1070 | 0x042E     | Block 1 (0x02) | Mute Timer End Hour (F12)   | 0 .. 23                                                 | 1     | 1    | h    | Number Box / Time (HH)   | number.hp_mute_end_hour        
-1262 | 0x04EE     | Block 3 (0x08) | Mute Timer End Min          | 0 .. 59                                                 | 1     | 1    | min  | Number Box / Time (MM)   | number.hp_mute_end_minute      
-1191 | 0x04A7     | Block 3 (0x08) | Hot Water Setpoint (R01)    | R06 .. R07 (Def: 40.0 .. 65.0, factory def: 55.0)       | 0.1   | 0.5  | °C   | Number Box / Thermostat  | number.hp_boiler_target_temp   
-1192 | 0x04A8     | Block 3 (0x08) | Heating Setpoint (R02)      | R08 .. R09 (Def: 20.0 .. 50.0, factory def: 40.0)       | 0.1   | 0.5  | °C   | Number Box / Thermostat  | number.hp_heating_target_temp  
-1193 | 0x04A9     | Block 3 (0x08) | Cooling Setpoint (R03)      | R10 .. R11 (Def: 12.0 .. 20.0, factory def: 12.0)       | 0.1   | 0.5  | °C   | Number Box / Thermostat  | number.hp_cooling_target_temp  
-1255 | 0x04E7     | Block 3 (0x08) | Timer 1 (ON) Enable (T01)   | 0 = Disabled, 1 = Enabled                               | 1     | 1    | -    | Toggle Switch            | switch.hp_timer_1_enable       
-1256 | 0x04E8     | Block 3 (0x08) | Timer 1 (ON) Hour (T02)     | 0 .. 23                                                 | 1     | 1    | h    | Number Box / Time (HH)   | number.hp_timer_1_hour         
-1259 | 0x04EB     | Block 3 (0x08) | Timer 1 (ON) Minute (T05)   | 0 .. 59                                                 | 1     | 1    | min  | Number Box / Time (MM)   | number.hp_timer_1_minute       
-1257 | 0x04E9     | Block 3 (0x08) | Timer 2 (OFF) Enable (T03)  | 0 = Disabled, 1 = Enabled                               | 1     | 1    | -    | Toggle Switch            | switch.hp_timer_2_enable       
-1258 | 0x04EA     | Block 3 (0x08) | Timer 2 (OFF) Hour (T04)    | 0 .. 23                                                 | 1     | 1    | h    | Number Box / Time (HH)   | number.hp_timer_2_hour         
-1260 | 0x04EC     | Block 3 (0x08) | Timer 2 (OFF) Minute (T06)  | 0 .. 59                                                 | 1     | 1    | min  | Number Box / Time (MM)   | number.hp_timer_2_minute       
+1069 | 0x042D     | Block 1 (0x02) | Mute Timer Start Hour (F11) | 0 .. 23                                                 | 1     | 1    | h    | Number Box / Time (HH)   | number.hp_mute_timer_start_hour
+1261 | 0x04ED     | Block 3 (0x08) | Mute Timer Start Min        | 0 .. 59                                                 | 1     | 1    | min  | Number Box / Time (MM)   | number.hp_mute_timer_start_min 
+1070 | 0x042E     | Block 1 (0x02) | Mute Timer End Hour (F12)   | 0 .. 23                                                 | 1     | 1    | h    | Number Box / Time (HH)   | number.hp_mute_timer_end_hour  
+1262 | 0x04EE     | Block 3 (0x08) | Mute Timer End Min          | 0 .. 59                                                 | 1     | 1    | min  | Number Box / Time (MM)   | number.hp_mute_timer_end_min   
+1191 | 0x04A7     | Block 3 (0x08) | Hot Water Setpoint (R01)    | R06 .. R07 (Def: 40.0 .. 65.0, factory def: 55.0)       | 0.1   | 0.5  | °C   | Number Box / Thermostat  | number.hp_hot_water_setpoint   
+1192 | 0x04A8     | Block 3 (0x08) | Heating Setpoint (R02)      | R08 .. R09 (Def: 20.0 .. 50.0, factory def: 40.0)       | 0.1   | 0.5  | °C   | Number Box / Thermostat  | number.hp_heating_setpoint     
+1193 | 0x04A9     | Block 3 (0x08) | Cooling Setpoint (R03)      | R10 .. R11 (Def: 12.0 .. 20.0, factory def: 12.0)       | 0.1   | 0.5  | °C   | Number Box / Thermostat  | number.hp_cooling_setpoint     
+1255 | 0x04E7     | Block 3 (0x08) | Timer 1 (ON) Enable (T01)   | 0 = Disabled, 1 = Enabled                               | 1     | 1    | -    | Toggle Switch            | switch.hp_timer_1_on_enable    
+1256 | 0x04E8     | Block 3 (0x08) | Timer 1 (ON) Hour (T02)     | 0 .. 23                                                 | 1     | 1    | h    | Number Box / Time (HH)   | number.hp_timer_1_on_hour      
+1259 | 0x04EB     | Block 3 (0x08) | Timer 1 (ON) Minute (T05)   | 0 .. 59                                                 | 1     | 1    | min  | Number Box / Time (MM)   | number.hp_timer_1_on_minute    
+1257 | 0x04E9     | Block 3 (0x08) | Timer 2 (OFF) Enable (T03)  | 0 = Disabled, 1 = Enabled                               | 1     | 1    | -    | Toggle Switch            | switch.hp_timer_2_off_enable   
+1258 | 0x04EA     | Block 3 (0x08) | Timer 2 (OFF) Hour (T04)    | 0 .. 23                                                 | 1     | 1    | h    | Number Box / Time (HH)   | number.hp_timer_2_off_hour     
+1260 | 0x04EC     | Block 3 (0x08) | Timer 2 (OFF) Minute (T06)  | 0 .. 59                                                 | 1     | 1    | min  | Number Box / Time (MM)   | number.hp_timer_2_off_minute   
 1167 | 0x048F     | Block 2 (0x04) | Pump Running Mode (P01)     | 0 = Ordinary, 1 = Special, 2 = Interval                 | 1     | 1    | -    | Dropdown / Select        | select.hp_pump_running_mode    
 1168 | 0x0490     | Block 2 (0x04) | Pump Running Interval (P02) | 0 .. 120                                                | 1     | 1    | min  | Number Box / Slider      | number.hp_pump_running_interval
 1169 | 0x0491     | Block 2 (0x04) | Pump Running Duration (P03) | 0 .. 30                                                 | 1     | 1    | min  | Number Box / Slider      | number.hp_pump_running_duration

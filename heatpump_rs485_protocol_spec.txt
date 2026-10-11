@@ -720,9 +720,18 @@ If your goal is to monitor and graph live Heat Pump operational metrics in Home 
    [00, 16, 07, 209] -> [0x00, 0x10, 0x07, 0xD1] (Broadcast Part A).
 4. Extract registers using the offsets defined in Section 5.1 & 5.2.
 5. Publish to Home Assistant via MQTT Discovery:
-   - Sensors: Inlet/Outlet/Discharge/Boiler/Suction/Evaporator/Ambient temps
-   - Binary Sensors: Compressor, Water Pump, 4-Way Valve, Fan, Heaters
-   - Measurements: Pressures, Frequencies, AC Voltage, AC Current, Fan RPM
+   - Sensors: Logical functional taxonomy:
+     * Water Temps: `[Temp] Water - Inlet`, `[Temp] Water - Outlet`, `[Temp] Water - Boiler`
+     * Refrig Temps: `[Temp] Refrig - Suction`, `Discharge`, `Evaporator`, `Superheat Suction`, `Superheat Discharge`
+     * System Temps: `[Temp] System - Ambient`, `Inverter`, `Module Protection`
+     * Pressures: `[Pressure] Refrig - Suction Pressure`, `Discharge Pressure`
+     * Electrical: `[Electrical] AC - Input Voltage`, `Input Current`, `DC - Bus Voltage`, `Comp - Compressor Current`
+     * Fan: `[Fan] Motor - Speed`, `Speed Set`
+     * Expansion Valve: `[EEV] Valve - Steps`
+     * System Status: `[System] Status - Freq Set`, `Freq Actual`, `Power ON/OFF`
+   - Binary Sensors & Relays:
+     * Relays: `[Output] O01 Compressor` .. `[Output] O13 3-way Valve`
+     * Alarms: `[Alarm] S01 High Pressure` .. `[Alarm] S07 Heater Overload`, `[Alarm] Detail - Code`
    - State topic: `nodered/heatpump/nodered_heatpump_001/state` (unretained, periodic 10s).
 
 --------------------------------------------------------------------------------
@@ -739,17 +748,36 @@ Node-RED provides bidirectional synchronization using Home Assistant MQTT Discov
        e.g. `{"boiler_target_temp": 50.0, "1191": 50.0}`
    - Configuration Set Topic: `nodered/heatpump/nodered_heatpump_001/config/<reg>/set`
      * Inbound MQTT topic subscribed by Node-RED.
-     * When user changes a setpoint in HA, HA publishes the float value (e.g. "52.0").
+     * When user changes a parameter in HA, HA publishes the value (e.g. "52.0" or "ON").
 
-2. Registered Configuration Register: Reg 1191 (Boiler Target Temp):
+2. Home Assistant UI Naming, Grouping & Entity ID Taxonomy:
+   To ensure clean logical grouping and alphabetical sorting on Home Assistant device cards:
+   - Controls Card (21 primary user controls):
+     Clean user names without bracket tags: `Power State`, `Operating Mode`, `Heating Setpoint`,
+     `Hot Water Setpoint`, `Cooling Setpoint`, `Timer 1 (ON) Enable`, `Fast Mute`, etc.
+     Entity IDs: `switch.hp_power_state`, `select.hp_operating_mode`, `number.hp_boiler_target_temp`, etc.
+   - Configuration Card (88 advanced registers with `entityCategory: "config"`):
+     Standardized format: `"[Group] Sub - ID Name"`
+     Matching LCD controller display tabs:
+     * `[System]`  (Group H): e.g. `[System] General - H01 Auto Start`, `[System] Inverter - H06 Frequency Control P Value`
+     * `[Protect]` (Group A): e.g. `[Protect] Antifreeze - A01 Antifreeze Temp`, `[Protect] Limits - A04 Shutdown Ambient Temp`
+     * `[Fan]`     (Group F): e.g. `[Fan] Heating - F01 Max Speed in Heating`, `[Fan] Motor - F14 DC/EC Fan Rated Speed`
+     * `[Defrost]` (Group D): e.g. `[Defrost] Exit - D01 Exit Defrost Temp`, `[Defrost] Sliding - D05 Sliding High Point LP`
+     * `[EEV]`     (Group E): e.g. `[EEV] Mode - E01 Adjustment Mode`, `[EEV] Heat - E02 Superheat in Heating`
+     * `[Disinf]`  (Group G): e.g. `[Disinf] Target - G01 Disinfection Setpoint`, `[Disinf] Schedule - G04 Work Cycle`
+     * `[Pump]`    (Group P): e.g. `[Pump] Timing - P04 Pump Advanced Start Time`, `[Pump] Manual - P05 Pump Manual-control`
+     * `[Temp]`    (Group R): e.g. `[Temp] Diff - R04 Power-on Return Diff`, `[Temp] Curve - R17 Compensation-ON Low AT`
+     Entity IDs (`object_id`): Generated cleanly as `hp_<slug>` (e.g. `number.hp_temp_curve_r17_compensation_on_low_at`).
+
+3. Registered Configuration Register Example: Reg 1191 (Hot Water Setpoint):
    - Register: 1191 (Settings Data Block 3: 1181..1270).
    - Scaling: Factor of 10 (`500` = `50.0 °C`).
-   - HA Entity: `number.hp_boiler_target_temp` (MQTT Number component).
+   - HA Entity: `number.hp_hot_water_setpoint` (MQTT Number component).
    - Unit: `°C`, Device Class: `temperature`, Icon: `mdi:water-boiler`.
-   - Range: Min 30.0 °C, Max 60.0 °C, Step: 0.5 °C, Mode: `box`.
+   - Range: Min 40.0 °C, Max 65.0 °C, Step: 0.5 °C, Mode: `box`.
    - Discovery Topic: `homeassistant/number/nodered_heatpump_001_reg_1191_boiler_target_temp/config`
 
-3. Bidirectional Write Sequence:
+4. Bidirectional Write Sequence:
    a. User changes temperature in HA to 52.0 °C.
    b. HA publishes "52.0" to `nodered/heatpump/nodered_heatpump_001/config/1191/set`.
    c. Node-RED verifies `flow.get("lcd_config_initialized") === true` (Flag 128 safety guard).
@@ -759,87 +787,9 @@ Node-RED provides bidirectional synchronization using Home Assistant MQTT Discov
    g. On the next periodic poll (within 1 sec), Slave 1 responds with Flag 8.
    h. Master reads Block 3 (FC 03) or writes Block 3 (FC 16), synchronizing the new setpoint.
 
-4. Extensibility: Adding Future Decoded Configuration Registers:
-   To expose any new decoded register to Home Assistant, simply add a single definition
-   entry to `configRegisterMap` in the "Create HA mqtt device" node (`a671a68f7d9c1dfb`):
-   ```javascript
-   const configRegisterMap = {
-       1011: {
-           key: "power_state",
-           name: "Heat Pump Power",
-           component: "switch",
-           icon: "mdi:power",
-           scale: 1,
-           options: { 0: "OFF", 1: "ON" }
-       },
-       1012: {
-           key: "operating_mode",
-           name: "Operating Mode",
-           component: "select",
-           icon: "mdi:heat-pump",
-           scale: 1,
-           options: ["Hot Water", "Heating", "Cooling", "Hot Water + Heating", "Hot Water + Cooling"]
-       },
-       1031: {
-           key: "electric_heater",
-           name: "Auxiliary Electric Heater",
-           component: "switch",
-           icon: "mdi:radiator",
-           scale: 1,
-           options: { 0: "OFF", 1: "ON" }
-       },
-       1074: {
-           key: "fast_mute",
-           name: "Fast Mute (Quiet Mode)",
-           component: "switch",
-           icon: "mdi:volume-mute",
-           scale: 1,
-           options: { 0: "OFF", 1: "ON" }
-       },
-       1191: {
-           key: "boiler_target_temp",
-           name: "Boiler Target Temp",
-           component: "number",
-           devClass: "temperature",
-           unit: "°C",
-           icon: "mdi:water-boiler",
-           scale: 0.1,        // Raw 505 -> 50.5 °C
-           min: 30,
-           max: 60,
-           step: 0.5,
-           mode: "box"
-       },
-       1192: {
-           key: "heating_target_temp",
-           name: "Heating Setpoint",
-           component: "number",
-           devClass: "temperature",
-           unit: "°C",
-           icon: "mdi:radiator",
-           scale: 0.1,        // Raw 220 -> 22.0 °C
-           min: 20,
-           max: 50,
-           step: 0.5,
-           mode: "box"
-       },
-       1193: {
-           key: "cooling_target_temp",
-           name: "Cooling Setpoint",
-           component: "number",
-           devClass: "temperature",
-           unit: "°C",
-           icon: "mdi:snowflake",
-           scale: 0.1,        // Raw 200 -> 20.0 °C
-           min: 12,
-           max: 20,
-           step: 0.5,
-           mode: "box"
-       }
-   };
-   ```
-   No changes to any other node or wiring are required! The discovery generator, state
-   publisher, command listener, safety guard, and Modbus block mapper handle everything
-   automatically.
+5. Node-RED Architecture:
+   The "Create HA mqtt device" node (`a671a68f7d9c1dfb`) builds all discovery payloads dynamically
+   from `sensorMap` and `configRegisterList`, ensuring automatic in-place entity synchronization.
 
 
 ================================================================================
