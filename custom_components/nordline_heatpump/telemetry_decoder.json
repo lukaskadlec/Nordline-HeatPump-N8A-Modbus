@@ -1,0 +1,380 @@
+[
+  {
+    "type": "int16be",
+    "name": "Teplota vstup",
+    "offset": 95,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Teplota vystup",
+    "offset": 97,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Teplota vytlak",
+    "offset": 99,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Teplota bojler",
+    "offset": 101,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Teplota sani",
+    "offset": 103,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Teplota vyparnik",
+    "offset": 105,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Teplota okoli",
+    "offset": 107,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Tlak sani",
+    "offset": 109,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Tlak vytlak",
+    "offset": 111,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Frekvence nastavena",
+    "offset": 113,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Frekvence skutecna",
+    "offset": 115,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "uint16be",
+    "name": "Ventilator rychlost",
+    "offset": 117,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "0",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Prehrati sani",
+    "offset": 121,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Prehrati vytlak",
+    "offset": 123,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Hodnota ochrane teploty modulu",
+    "offset": 125,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "uint16be",
+    "name": "AC vstupni napeti",
+    "offset": 127,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "0",
+    "mask": ""
+  },
+  {
+    "type": "uint16be",
+    "name": "AC vstupni proud",
+    "offset": 129,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "uint16be",
+    "name": "Fazovy proud kompresoru",
+    "offset": 131,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "uint16be",
+    "name": "Napeti sbernice",
+    "offset": 133,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "0",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Teplota invertoru",
+    "offset": 135,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "/10",
+    "mask": ""
+  },
+  {
+    "type": "uint16be",
+    "name": "Ventilator nastavena rychlost",
+    "offset": 137,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "0",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Compressor (O01)",
+    "offset": 44,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Water Pump (O02)",
+    "offset": 44,
+    "length": 1,
+    "offsetbit": 1,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "4-way Valve (O03)",
+    "offset": 44,
+    "length": 1,
+    "offsetbit": 2,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Fan Motor (O04)",
+    "offset": 44,
+    "length": 1,
+    "offsetbit": 3,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Antifreeze Heating Strip (O06)",
+    "offset": 44,
+    "length": 1,
+    "offsetbit": 5,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Crank Antifreeze Heating Strip (O07)",
+    "offset": 44,
+    "length": 1,
+    "offsetbit": 6,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Spray Valve (O08)",
+    "offset": 44,
+    "length": 1,
+    "offsetbit": 7,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Auxiliary Electric Heater (O09)",
+    "offset": 43,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Alarm (O11)",
+    "offset": 43,
+    "length": 1,
+    "offsetbit": 2,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Hot Water Pump (O12)",
+    "offset": 43,
+    "length": 1,
+    "offsetbit": 3,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "3-way Valve (O13)",
+    "offset": 43,
+    "length": 1,
+    "offsetbit": 4,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "EVV",
+    "offset": 45,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "0",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "ON/OFF",
+    "offset": 27,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "0",
+    "mask": ""
+  },
+  {
+    "type": "int16be",
+    "name": "Unit Status",
+    "offset": 73,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "0",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "High Pressure Alarm (S01)",
+    "offset": 176,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Low Pressure Alarm (S02)",
+    "offset": 176,
+    "length": 1,
+    "offsetbit": 1,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Water Flow Alarm (S03)",
+    "offset": 176,
+    "length": 1,
+    "offsetbit": 2,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Emergency Switch Alarm (S04)",
+    "offset": 176,
+    "length": 1,
+    "offsetbit": 3,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Mode Switch (S05)",
+    "offset": 176,
+    "length": 1,
+    "offsetbit": 4,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "bool",
+    "name": "Heater Overload Alarm (S07)",
+    "offset": 176,
+    "length": 1,
+    "offsetbit": 6,
+    "scale": "1",
+    "mask": ""
+  },
+  {
+    "type": "uint8",
+    "name": "Alarm detail",
+    "offset": 175,
+    "length": 1,
+    "offsetbit": 0,
+    "scale": "0",
+    "mask": ""
+  }
+]

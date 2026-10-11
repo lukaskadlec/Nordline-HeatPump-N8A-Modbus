@@ -6,11 +6,11 @@
 
 Bidirectional monitoring, telemetry, and full configuration control integration for the **Nordline N8A Air-to-Water Heat Pump** (equipped with the **PC8002 PCB Controller** and **Slave 1 LCD Wall Unit**).
 
-This project integrates the heat pump with **Home Assistant** via **RS-485 Modbus RTU**, **Node-RED**, and **MQTT**, featuring:
-- **Live Telemetry & Diagnostics**: 42 status sensors (temperatures, refrigerant pressures, compressor inverter frequency, electrical parameters, EEV position, fan speed, relay outputs, and alarms).
-- **Full Configuration & Control**: 109 registers (21 primary dashboard controls such as heating/DHW setpoints, operational modes, scheduled mute timers, and pump modes + 88 advanced engineering parameters).
-- **Coexistence & Dynamic Failover (10-Second Watchdog)**: Smart arbitration between the physical wall LCD unit and Node-RED's LCD emulator to prevent RS-485 bus packet collisions.
-- **Automatic Home Assistant MQTT Discovery**: Instantly auto-creates all devices, controls, numbers, switches, selects, and telemetry sensors with structured grouping.
+This project offers two implementation paths:
+1. **Native Home Assistant Custom Integration (HACS) [Recommended]**: Direct local serial port connection (`/dev/ttyUSB*`), zero Node-RED or MQTT dependencies, UI Config Flow, native `climate` thermostat entity, 42 telemetry sensors, 21 primary controls, 88 configuration registers, built-in 10-second silence watchdog, and automatic daily EEPROM write protection!
+2. **Node-RED & MQTT Alternative**: Streamlined production flow ([`flows.json`](flows.json)) with all debugging and scratch file-logging removed, communicating via MQTT Discovery.
+
+---
 
 ---
 
@@ -18,13 +18,12 @@ This project integrates the heat pump with **Home Assistant** via **RS-485 Modbu
 1. [System Architecture](#system-architecture)
 2. [Hardware Requirements](#hardware-requirements)
 3. [Wiring & Custom Power Switch](#wiring--custom-power-switch)
-4. [Software & Prerequisites](#software--prerequisites)
-5. [Node-RED Plugins & Nodes](#node-red-plugins--nodes)
+4. [Method A: Native HACS Integration (Recommended)](#method-a-native-hacs-integration-recommended)
+5. [Method B: Node-RED & MQTT Alternative](#method-b-node-red--mqtt-alternative)
 6. [Serial Port Settings](#serial-port-settings)
-7. [Installation & Setup](#installation--setup)
-8. [Home Assistant Integration & UI](#home-assistant-integration--ui)
-9. [Safety & Fail-Safe Mechanisms](#safety--fail-safe-mechanisms)
-10. [Reference Documentation](#reference-documentation)
+7. [Home Assistant Integration & UI](#home-assistant-integration--ui)
+8. [Safety & Fail-Safe Mechanisms](#safety--fail-safe-mechanisms)
+9. [Reference Documentation](#reference-documentation)
 
 ---
 
@@ -36,22 +35,31 @@ This project integrates the heat pump with **Home Assistant** via **RS-485 Modbu
 | (Slave ID 1)          |<---+          +--->| (e.g. /dev/ttyUSB-TC)     |
 +-----------------------+    |          |    +---------------------------+
                              |  RS-485  |                  |
++-----------------------+    |  2-Wire  |                  |
+| Heat Pump Master Board|----+-- Bus ---+                  v
+| (PC8002 PCB)          |                    +---------------------------+
++-----------------------+                    |  Home Assistant           |
+                                             |  - HACS Integration (Direct)|
+                                             |  OR Node-RED -> MQTT      |
+                                             +---------------------------+
+```text
++-----------------------+                    +---------------------------+
+| Physical LCD Wall Unit|                    | USB-to-RS485 Dongle       |
+| (Slave ID 1)          |<---+          +--->| (e.g. /dev/ttyUSB-TC)     |
++-----------------------+    |          |    +---------------------------+
+                             |  RS-485  |                  |
 +-----------------------+    |  2-Wire  |                  v
-| Heat Pump Master Board|----+-- Bus ---+            +------------+
-| (PC8002 PCB)          |                            |  Node-RED  |
-+-----------------------+                            +------------+
-                                                           |  MQTT
-                                                           v
-                                                     +------------+
-                                                     | Home Asst. |
-                                                     +------------+
+| Heat Pump Master Board|----+-- Bus ---+    +---------------------------+
+| (PC8002 PCB)          |                    |  Home Assistant           |
++-----------------------+                    |  - HACS Integration (Direct)|
+                                             |  OR Node-RED -> MQTT      |
+                                             +---------------------------+
 ```
 
 1. **Master Controller (PC8002 PCB)** cyclically broadcasts status frames (`00, 16, 07` and `00, 16, 08`) and polls the LCD display (`01, 03, 0B, B9, 00, 15`) every second.
-2. **Node-RED** connects to the bus via an isolated USB-to-RS485 transceiver.
-3. When the physical LCD is active, Node-RED sniffs all frames passively (read-only telemetry).
-4. When the physical LCD is disconnected or turned off via the custom power switch for >10 seconds, Node-RED's LCD Emulator takes over answering polls and synchronizing parameter adjustments from Home Assistant.
-5. All telemetry metrics and configuration states are published over **MQTT** with Home Assistant auto-discovery.
+2. **Direct Serial Access**: The host connects to the bus via an isolated USB-to-RS485 transceiver.
+3. **Passive Sniffing**: While the physical LCD is active, Home Assistant or Node-RED passively reads live telemetry frames.
+4. **Coexistence & Watchdog (10s)**: When the physical LCD is disconnected or turned off via the rocker power switch for >10 seconds, the LCD Emulator seamlessly answers Master polls and synchronizes settings adjustments from Home Assistant.
 
 ---
 
@@ -65,9 +73,9 @@ To replicate this setup, you need:
    - 2-wire or 3-wire cable connecting `A (Data+)`, `B (Data-)`, and `G (GND)` on the RS-485 bus.
 4. **Custom Rocker Power Switch (Optional but Recommended)**:
    - A sub-miniature toggle or rocker switch installed on the wall LCD unit's housing to break the `V (VCC)` power line.
-   - Allows switching between the physical wall display and the Node-RED emulator on demand.
-5. **Home Server / SBC**:
-   - Raspberry Pi, Intel NUC, Home Assistant Yellow/Green, or Linux VM running Home Assistant, an MQTT broker (Mosquitto), and Node-RED.
+   - Allows switching between the physical wall display and software emulation on demand.
+5. **Home Assistant Host**:
+   - Home Assistant OS / Supervised on Raspberry Pi, Intel NUC, Home Assistant Yellow/Green, or Linux VM.
 
 ---
 
@@ -90,78 +98,85 @@ Inside the LCD wall controller, you will find a 6-position terminal block:
 ### 2. Custom Power Switch Installation
 Because RS-485 is a single-master shared bus, having two devices respond to Slave 1 queries simultaneously causes electrical collisions and framing errors.
 
-To cleanly switch between physical control and Node-RED automation, a red rocker power switch was wired in-line with terminal **V**:
+To cleanly switch between physical control and automation, a red rocker power switch was wired in-line with terminal **V**:
 
 ![Custom Power Switch](assets/custom_power_switch.JPEG)
 
-- **Switch ON**: The physical LCD powers on and responds to Master queries. Node-RED automatically detects `01, 03, 42 Display Reply` packets and disables its internal emulator, operating in passive sniffing mode.
-- **Switch OFF**: The physical LCD is depowered. After 10 seconds of silence, Node-RED's 10-second watchdog expires, and Node-RED's LCD Emulator automatically takes over answering Master queries and processing Home Assistant commands.
+- **Switch ON**: The physical LCD powers on and responds to Master queries. Software emulation is automatically disabled, operating in passive sniffing mode.
+- **Switch OFF**: The physical LCD is depowered. After 10 seconds of silence, the 10-second watchdog expires, and software emulation automatically takes over answering Master queries and processing Home Assistant commands.
 
 ---
 
-## Software & Prerequisites
+## Method A: Native HACS Integration (Recommended)
 
-1. **Home Assistant**: Core 2023.x or newer with the native **MQTT Integration** enabled.
-2. **MQTT Broker**: **Mosquitto Broker** (add-on in Home Assistant OS or standalone container).
-3. **Node-RED**: Version 2.x, 3.x, or 4.x running as a Home Assistant add-on or Docker container.
+The native custom component (`custom_components/nordline_heatpump`) connects directly to the USB serial adapter without requiring Node-RED or an MQTT broker.
+
+### Features:
+- **Native Thermostat**: Unified `climate` entity (`Thermostat`) with Heating, Cooling, and Off modes + target setpoint slider.
+- **All 109 Registers & 42 Telemetry Sensors**: Automatically creates entities for all parameters.
+- **Built-in 10-Second Watchdog**: Auto-detects physical LCD silence and seamlessly takes over.
+- **Hardware Lifespan Guard**: Built-in daily write limiter enforcing the safe **20 writes/day** ceiling.
+
+### Installation via HACS (Recommended):
+1. In Home Assistant, open **HACS** -> **Integrations**.
+2. Click the three dots (⋮) in the top right corner and select **Custom repositories**.
+3. Fill in the repository details:
+   - **Repository**: `https://github.com/lukaskadlec/Nordline-HeatPump-N8A-Modbus`
+   - **Type / Category**: `Integration`
+4. Click **Add**.
+5. Find **Nordline Heat Pump N8A Modbus** in HACS and click **Download**.
+6. Restart Home Assistant.
+7. Go to **Settings** -> **Devices & Services** -> **Add Integration**.
+8. Search for **Nordline Heat Pump N8A Modbus**.
+9. Select your serial port (e.g. `/dev/ttyUSB-TC` or `/dev/serial/by-id/...`) and baud rate (`9600`), then click **Submit**.
+10. The heat pump device will appear immediately with all climate controls, sensors, and configuration switches!
+
+### Manual Installation (Alternative):
+1. Copy the `custom_components/nordline_heatpump` directory into your Home Assistant `/config/custom_components/` folder:
+   ```bash
+   cp -r custom_components/nordline_heatpump /config/custom_components/
+   ```
+2. Restart Home Assistant and follow steps 7–10 above.
 
 ---
 
-## Node-RED Plugins & Nodes
+## Method B: Node-RED & MQTT Alternative
 
-The provided flow (`flows.json`) requires the following palette node packages:
+For setups already running Node-RED, a streamlined production flow (`flows.json`) is provided with all debugging and scratch file-logging removed.
 
-### Required Packages:
-1. **`node-red-contrib-buffer-parser`**:
-   - Parses complex binary Modbus frames into numbers, booleans, and bitfields.
-2. **`node-red-node-serialport`**:
-   - Interfaces directly with the USB-RS485 adapter on Linux or Windows.
+### Prerequisites:
+1. **Home Assistant**: with native **MQTT Integration** enabled.
+2. **Mosquitto Broker**: installed and running.
+3. **Node-RED**: with palette packages `node-red-contrib-buffer-parser` and `node-red-node-serialport`.
 
-### Installation via Node-RED Palette Manager:
-1. Open Node-RED menu -> **Manage palette** -> **Install** tab.
-2. Search for and install:
-   - `node-red-contrib-buffer-parser`
-   - `node-red-node-serialport`
+### Setup:
+1. In Node-RED, open the top-right hamburger menu -> **Import**.
+2. Select and import [`flows.json`](flows.json).
+3. Configure the `mqtt` broker node with your server IP and credentials.
+4. Verify the serial port path in `/dev/ttyUSB-TC`.
+5. Click **Deploy**. Telemetry and MQTT Discovery payloads will be transmitted automatically.
 
-*(All other nodes—`mqtt in`, `mqtt out`, `function`, `delay`, `file`, `inject`, and `debug`—are built into Node-RED core).*
+![Node-RED Flow Screenshot](assets/Node_Red_screen.png)
 
 ---
 
 ## Serial Port Settings
 
-Configure the `serial-port` configuration node in Node-RED with the following parameters:
+The RS-485 bus operates with the following physical serial parameters (configured in the HACS setup dialog or the Node-RED `serial-port` node):
 
-| Property | Value | Description |
+| Parameter | Value | Description |
 |:---|:---|:---|
-| **Serial Port** | `/dev/ttyUSB-TC` *(or your port path / COM port)* | Linux device path or symlink |
-| **Baud Rate** | `9600` | Heat pump Modbus baud rate |
-| **Data Bits** | `8` | Standard Modbus RTU |
-| **Parity** | `None` | No parity bit |
+| **Serial Port** | `/dev/ttyUSB-TC` *(or `/dev/serial/by-id/...`)* | Linux device node or persistent symlink |
+| **Baud Rate** | `9600` | Heat pump Modbus RTU communication rate |
+| **Data Bits** | `8` | Standard Modbus RTU framing |
+| **Parity** | `None` | No parity |
 | **Stop Bits** | `1` | 1 stop bit |
 | **Flow Control** | DTR: auto, RTS: auto, CTS: auto, DSR: auto | No hardware handshaking |
-| **Split Input** | After a silence of **`40 ms`** | Delivers complete frames |
-| **Deliver** | `binary buffers` | Raw binary Buffer objects |
-| **Response Timeout** | `1000 ms` | 1 second default timeout |
+| **Split Input / Timeout** | After a silence of **`40 ms`** | Guarantees complete Modbus frame delivery |
+| **Delivery Mode** | `binary buffers` | Raw binary Buffer objects |
+| **Response Timeout** | `1000 ms` | 1-second timeout |
 
-![Serial Port Configuration](assets/serial_port_setting.png)
-
----
-
-## Installation & Setup
-
-1. **Import the Flow**:
-   - In Node-RED, open the top-right hamburger menu -> **Import**.
-   - Select and import [`flows.json`](flows.json).
-2. **Configure MQTT Broker Node**:
-   - Double-click the `mqtt` broker configuration node.
-   - Set the server IP (e.g. `127.0.0.1` or Home Assistant IP), port `1883`, and MQTT credentials.
-3. **Configure Serial Port**:
-   - Double-click the `/dev/ttyUSB-TC` node and verify your serial port path.
-4. **Deploy**:
-   - Click **Deploy** in Node-RED.
-   - At startup, the flow runs an automatic 10-second silence grace period, initializes telemetry, and transmits MQTT discovery payloads to Home Assistant.
-
-![Node-RED Flow Screenshot](assets/Node_Red_screen.png)
+![Serial Port Settings](assets/serial_port_setting.png)
 
 ---
 

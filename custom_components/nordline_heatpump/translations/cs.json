@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Připojení tepelného čerpadla Nordline (Modbus RTU)",
+        "description": "Vyberte sériový port připojený k převodníku RS-485 tepelného čerpadla Nordline N8A.",
+        "data": {
+          "serial_port": "Cesta k sériovému portu",
+          "baudrate": "Přenosová rychlost"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nepodařilo se připojit k vybranému sériovému portu."
+    },
+    "abort": {
+      "already_configured": "Tento sériový port je již v integraci nakonfigurován."
+    }
+  }
+}

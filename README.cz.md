@@ -6,11 +6,11 @@
 
 Obousměrné monitorování, telemetrie a plné konfigurační řízení pro tepelné čerpadlo **Nordline N8A vzduch-voda** (vybavené řídicí deskou **PC8002 PCB** a nástěnnou LCD jednotkou **Slave 1**).
 
-Tento projekt integruje tepelné čerpadlo do systému **Home Assistant** prostřednictvím sběrnice **RS-485 Modbus RTU**, **Node-RED** a protokolu **MQTT**. Zahrnuje:
-- **Živá telemetrie a diagnostika**: 42 stavových senzorů (teploty vody a chladiva, tlaky chladiva, frekvence invertoru kompresoru, elektrické parametry, kroky elektronického expanzního ventilu EEV, otáčky ventilátoru, výstupní relé a alarmy).
-- **Kompletní konfigurace a ovládání**: 109 registrů (21 hlavních ovládacích prvků pro ovládací panely jako požadované teploty topení/TUV, provozní režimy, časovač tichého režimu a režimy oběhového čerpadla + 88 pokročilých servisních parametrů).
-- **Koexistence a dynamický failover (10sekundový watchdog)**: Inteligentní přepínání mezi fyzickým nástěnným LCD ovladačem a emulátorem LCD v Node-RED pro zamezení kolizí paketů na sběrnici RS-485.
-- **Automatické vyhledávání v Home Assistant přes MQTT Discovery**: Okamžité automatické vytvoření všech entit zařízení, ovládacích prvků, číselníků, přepínačů, výběrových polí a telemetrických senzorů se strukturovaným řazením a seskupením.
+Tento projekt nabízí dvě cesty nasazení:
+1. **Nativní integrace pro Home Assistant (HACS) [Doporučeno]**: Přímé připojení přes lokální sériový port USB (`/dev/ttyUSB*`), nulová závislost na Node-RED či MQTT brokeru, grafická konfigurace (UI Config Flow), nativní termostatová entita `climate`, 42 telemetrických senzorů, 21 primárních ovládacích prvků, 88 konfiguračních registrů, vestavěný 10sekundový watchdog ticha fyzického LCD a automatická denní ochrana paměti EEPROM!
+2. **Alternativa přes Node-RED a MQTT**: Odladěný produkční tok ([`flows.json`](flows.json)) s odstraněným laděním a pomocnými zápisy do souborů, komunikující přes MQTT Discovery.
+
+---
 
 ---
 
@@ -18,13 +18,12 @@ Tento projekt integruje tepelné čerpadlo do systému **Home Assistant** prost�
 1. [Architektura systému](#architektura-systému)
 2. [Požadavky na hardware](#požadavky-na-hardware)
 3. [Zapojení a přídavný vypínač napájení](#zapojení-a-přídavný-vypínač-napájení)
-4. [Požadavky na software](#požadavky-na-software)
-5. [Doplňky a uzly pro Node-RED](#doplňky-a-uzly-pro-node-red)
+4. [Metoda A: Nativní HACS integrace (Doporučeno)](#metoda-a-nativní-hacs-integrace-doporučeno)
+5. [Metoda B: Alternativa přes Node-RED a MQTT](#metoda-b-alternativa-přes-node-red-a-mqtt)
 6. [Nastavení sériového portu](#nastavení-sériového-portu)
-7. [Instalace a konfigurace](#instalace-a-konfigurace)
-8. [Integrace do Home Assistant a uživatelské rozhraní](#integrace-do-home-assistant-a-uživatelské-rozhraní)
-9. [Bezpečnostní a ochranné mechanismy](#bezpečnostní-a-ochranné-mechanismy)
-10. [Referenční dokumentace](#referenční-dokumentace)
+7. [Integrace do Home Assistant a uživatelské rozhraní](#integrace-do-home-assistant-a-uživatelské-rozhraní)
+8. [Bezpečnostní a ochranné mechanismy](#bezpečnostní-a-ochranné-mechanismy)
+9. [Referenční dokumentace](#referenční-dokumentace)
 
 ---
 
@@ -37,21 +36,17 @@ Tento projekt integruje tepelné čerpadlo do systému **Home Assistant** prost�
 +-----------------------+    |          |    +---------------------------+
                              |  RS-485  |                  |
 +-----------------------+    | dvoudrát |                  v
-| Řídicí deska čerpadla |----+ sběrnice +            +------------+
-| (PC8002 PCB)          |                            |  Node-RED  |
-+-----------------------+                            +------------+
-                                                           |  MQTT
-                                                           v
-                                                     +------------+
-                                                     | Home Asst. |
-                                                     +------------+
+| Řídicí deska čerpadla |----+ sběrnice +    +---------------------------+
+| (PC8002 PCB)          |                    |  Home Assistant           |
++-----------------------+                    |  - HACS integrace (Přímo) |
+                                             |  NEBO Node-RED -> MQTT    |
+                                             +---------------------------+
 ```
 
 1. **Hlavní řídicí deska (PC8002 PCB - Master)** cyklicky každou sekundu vysílá broadcasty se stavem (`00, 16, 07` a `00, 16, 08`) a dotazuje se LCD displeje (`01, 03, 0B, B9, 00, 15`).
-2. **Node-RED** je ke sběrnici připojen prostřednictvím galvanicky odděleného USB-RS485 převodníku.
-3. Pokud je fyzický LCD ovladač aktivní, Node-RED pouze pasivně naslouchá veškerým rámcům na sběrnici (telemetrie pouze pro čtení).
-4. Pokud je fyzický LCD ovladač odpojen nebo vypnut přídavným vypínačem po dobu delší než 10 sekund, emulátor LCD v Node-RED automaticky převezme odpovídání na dotazy Masteru a synchronizaci parametrů z Home Assistant.
-5. Všechny telemetrické veličiny a stavy konfigurace jsou publikovány přes **MQTT** s automatickým vyhledáváním pro Home Assistant.
+2. **Přímé sériové připojení**: Hostitelský systém je ke sběrnici připojen prostřednictvím galvanicky odděleného USB-RS485 převodníku.
+3. **Pasivní odposlech**: Pokud je fyzický LCD ovladač aktivní, Home Assistant nebo Node-RED pouze pasivně naslouchá živé telemetrii na sběrnici.
+4. **Koexistence a watchdog (10s)**: Pokud je fyzický LCD ovladač odpojen nebo vypnut přídavným vypínačem po dobu delší než 10 sekund, softwarový emulátor LCD automaticky převezme odpovídání na dotazy Masteru a synchronizaci parametrů z Home Assistant.
 
 ---
 
@@ -65,9 +60,9 @@ Pro zprovoznění tohoto řešení budete potřebovat:
    - Dvoudrátový nebo třídrátový kabel pro propojení signálů `A (Data+)`, `B (Data-)` a volitelně `G (GND)` sběrnice RS-485.
 4. **Přídavný kolébkový vypínač napájení (volitelný, ale doporučený)**:
    - Malý přepínač instalovaný do krytu nástěnné LCD jednotky přerušující napájecí vodič `V (VCC)`.
-   - Umožňuje okamžité a bezpečné přepínání mezi fyzickým nástěnným panelem a emulátorem v Node-RED.
-5. **Domácí server / jednodeskový počítač (SBC)**:
-   - Raspberry Pi, Intel NUC, Home Assistant Yellow/Green nebo virtuální stroj s Linuxem provozující Home Assistant, MQTT broker (Mosquitto) a Node-RED.
+   - Umožňuje okamžité a bezpečné přepínání mezi fyzickým nástěnným panelem a emulací.
+5. **Domácí server pro Home Assistant**:
+   - Raspberry Pi, Intel NUC, Home Assistant Yellow/Green nebo virtuální stroj s Home Assistant OS / Supervised.
 
 ---
 
@@ -90,46 +85,71 @@ Uvnitř nástěnného LCD ovladače se nachází 6pólová svorkovnice:
 ### 2. Instalace přídavného vypínače napájení
 Jelikož je RS-485 sběrnice s jedním Masterem, současné odpovídání dvou zařízení na adresu Slave 1 způsobuje elektrické kolize a chyby rámců (framing/CRC errors).
 
-Pro čisté přepínání mezi fyzickým ovládáním a automatizací v Node-RED byl do série s napájecí svorkou **V** zapojen červený kolébkový vypínač:
+Pro čisté přepínání mezi fyzickým ovládáním a automatizací byl do série s napájecí svorkou **V** zapojen červený kolébkový vypínač:
 
 ![Přídavný vypínač](assets/custom_power_switch.JPEG)
 
-- **Vypínač ZAPNUT (ON)**: Fyzický LCD displej je napájen a odpovídá na dotazy řídicí desky (Master). Node-RED automaticky detekuje pakety `01, 03, 42 Display Reply`, okamžitě deaktivuje svůj interní emulátor a přechází do čistě pasivního režimu odposlechu.
-- **Vypínač VYPNUT (OFF)**: Fyzický LCD displej je bez napájení. Po 10 sekundách ticha na sběrnici vyprší 10sekundový watchdog v Node-RED a interní emulátor LCD automaticky převezme odpovídání na dotazy Masteru i zpracování příkazů z Home Assistant.
+- **Vypínač ZAPNUT (ON)**: Fyzický LCD displej je napájen a odpovídá na dotazy řídicí desky (Master). Softwarová emulace se automaticky vypne a systém přechází do čistě pasivního režimu odposlechu.
+- **Vypínač VYPNUT (OFF)**: Fyzický LCD displej je bez napájení. Po 10 sekundách ticha na sběrnici vyprší 10sekundový watchdog a softwarový emulátor LCD automaticky převezme odpovídání na dotazy Masteru i zpracování příkazů z Home Assistant.
 
 ---
 
-## Požadavky na software
+## Metoda A: Nativní HACS integrace (Doporučeno)
 
-1. **Home Assistant**: Core 2023.x nebo novější s aktivovanou nativní integrací **MQTT**.
-2. **MQTT Broker**: **Mosquitto Broker** (doplněk v Home Assistant OS nebo samostatný Docker kontejner).
-3. **Node-RED**: Verze 2.x, 3.x nebo 4.x provozovaná jako doplněk Home Assistant nebo kontejner.
+Nativní uživatelská komponenta (`custom_components/nordline_heatpump`) komunikuje přímo s převodníkem USB-RS485 a nevyžaduje Node-RED ani MQTT broker.
+
+### Vlastnosti:
+- **Nativní termostat**: Sjednocená entita `climate` (`Termostat`) s režimy Topení, Chlazení a Vypnuto + posuvníkem žádané teploty.
+- **Všech 109 registrů a 42 telemetrických senzorů**: Automaticky vytvoří přehledné entity pro veškeré parametry.
+- **Vestavěný 10sekundový watchdog**: Automaticky detekuje ticho fyzického LCD panelu a hladce převezme řízení.
+- **Ochrana životnosti EEPROM**: Integrovaný denní čítač a omezovač zápisů vynucující bezpečný strop **20 zápisů za den**.
+
+### Instalace přes HACS (Doporučeno):
+1. V Home Assistant otevřete **HACS** -> **Integrace**.
+2. Klikněte na tři tečky (⋮) v pravém horním rohu a vyberte **Vlastní repozitáře** (Custom repositories).
+3. Vyplňte údaje o repozitáři:
+   - **Repozitář**: `https://github.com/lukaskadlec/Nordline-HeatPump-N8A-Modbus`
+   - **Typ / Kategorie**: `Integrace` (Integration)
+4. Klikněte na **Přidat** (Add).
+5. V HACS vyhledejte **Nordline Heat Pump N8A Modbus** a klikněte na **Stáhnout** (Download).
+6. Restartujte Home Assistant.
+7. V Home Assistant přejděte do **Nastavení** -> **Zařízení a služby** -> **Přidat integraci**.
+8. Vyhledejte **Nordline Heat Pump N8A Modbus**.
+9. Zvolte váš sériový port (např. `/dev/ttyUSB-TC` nebo `/dev/serial/by-id/...`), přenosovou rychlost (`9600`) a potvrďte tlačítkem **Odeslat**.
+10. Zařízení tepelného čerpadla se okamžitě zobrazí se všemi ovládacími prvky, termostatem, senzory a konfiguračními přepínači!
+
+### Manuální instalace (Alternativa):
+1. Zkopírujte složku `custom_components/nordline_heatpump` do vašeho adresáře `/config/custom_components/` v Home Assistant:
+   ```bash
+   cp -r custom_components/nordline_heatpump /config/custom_components/
+   ```
+2. Restartujte Home Assistant a postupujte podle kroků 7–10 výše.
 
 ---
 
-## Doplňky a uzly pro Node-RED
+## Metoda B: Alternativa přes Node-RED a MQTT
 
-Poskytnutý tok (`flows.json`) vyžaduje následující doplňkové balíčky uzlů:
+Pro instalace, které již provozují Node-RED, je k dispozici odladěný produkční tok (`flows.json`) s odstraněným laděním a pomocnými soubory.
 
-### Požadované balíčky:
-1. **`node-red-contrib-buffer-parser`**:
-   - Dekóduje a sestavuje složité binární Modbus rámce na čísla, booleany a bitová pole.
-2. **`node-red-node-serialport`**:
-   - Zajišťuje přímou obousměrnou komunikaci s převodníkem USB-RS485 v Linuxu i Windows.
+### Požadavky:
+1. **Home Assistant**: s aktivovanou integrací **MQTT**.
+2. **Mosquitto Broker**: nainstalovaný a spuštěný.
+3. **Node-RED**: s balíčky palety `node-red-contrib-buffer-parser` a `node-red-node-serialport`.
 
-### Instalace přes Správce palety v Node-RED:
-1. V Node-RED otevřete hlavní menu vpravo nahoře -> **Spravovat paletu** (Manage palette) -> záložka **Instalovat** (Install).
-2. Vyhledejte a nainstalujte:
-   - `node-red-contrib-buffer-parser`
-   - `node-red-node-serialport`
+### Nastavení:
+1. V Node-RED otevřete nabídku vpravo nahoře -> **Importovat**.
+2. Vyberte a importujte soubor [`flows.json`](flows.json).
+3. Nakonfigurujte uzel `mqtt` broker (IP adresa a přihlašovací údaje).
+4. Zkontrolujte cestu k sériovému portu v uzlu `/dev/ttyUSB-TC`.
+5. Klikněte na **Nasadit** (Deploy). Telemetrie a zprávy MQTT Discovery se odešlou automaticky.
 
-*(Všechny ostatní uzly — `mqtt in`, `mqtt out`, `function`, `delay`, `file`, `inject` a `debug` — jsou nativní součástí jádra Node-RED).*
+![Snímek toku v Node-RED](assets/Node_Red_screen.png)
 
 ---
 
 ## Nastavení sériového portu
 
-V konfiguračním uzlu `serial-port` v Node-RED nastavte následující parametry:
+V konfiguračním uzlu `serial-port` v Node-RED (nebo konfiguraci HACS integrace) se používají tyto parametry sběrnice:
 
 | Vlastnost | Hodnota | Popis |
 |:---|:---|:---|
@@ -142,26 +162,7 @@ V konfiguračním uzlu `serial-port` v Node-RED nastavte následující parametr
 | **Rozdělení vstupu** | Po odmlce trvající **`40 ms`** | Zajišťuje doručení celistvých rámců |
 | **Doručovat jako** | `binární buffery` (binary buffers) | Nativní objekty typu Buffer |
 | **Časový limit odezvy**| `1000 ms` | Výchozí limit 1 sekunda |
-
 ![Nastavení sériového portu](assets/serial_port_setting.png)
-
----
-
-## Instalace a konfigurace
-
-1. **Import toku**:
-   - V Node-RED otevřete nabídku vpravo nahoře -> **Importovat** (Import).
-   - Vyberte a importujte soubor [`flows.json`](flows.json).
-2. **Konfigurace MQTT brokera**:
-   - Dvakrát klikněte na konfigurační uzel `mqtt` broker.
-   - Nastavte IP adresu serveru (např. `127.0.0.1` nebo IP Home Assistant), port `1883` a přihlašovací údaje k MQTT.
-3. **Konfigurace sériového portu**:
-   - Dvakrát klikněte na uzel `/dev/ttyUSB-TC` a ověřte správnost cesty k sériovému portu.
-4. **Nasazení (Deploy)**:
-   - Klikněte na tlačítko **Nasadit** (Deploy) v pravém horním rohu Node-RED.
-   - Po spuštění tok aktivuje 10sekundovou ochrannou lhůtu ticha, inicializuje telemetrii a odešle zprávy MQTT Discovery do Home Assistant.
-
-![Snímek toku v Node-RED](assets/Node_Red_screen.png)
 
 ---
 

@@ -1,0 +1,240 @@
+{
+  "Teplota vstup": {
+    "unit": "°°C",
+    "dev°Class": "temperature",
+    "name": "[Temp] Water - Inlet",
+    "icon": "mdi:thermometer-chevron-down"
+  },
+  "Teplota vystup": {
+    "unit": "°°C",
+    "dev°Class": "temperature",
+    "name": "[Temp] Water - Outlet",
+    "icon": "mdi:thermometer-chevron-up"
+  },
+  "Teplota vytlak": {
+    "unit": "°°C",
+    "dev°Class": "temperature",
+    "name": "[Temp] Refrig - Discharge",
+    "icon": "mdi:thermometer-alert"
+  },
+  "Teplota bojler": {
+    "unit": "°°C",
+    "dev°Class": "temperature",
+    "name": "[Temp] Water - Boiler",
+    "icon": "mdi:water-boiler"
+  },
+  "Teplota sani": {
+    "unit": "°°C",
+    "dev°Class": "temperature",
+    "name": "[Temp] Refrig - Suction",
+    "icon": "mdi:thermometer-low"
+  },
+  "Teplota vyparnik": {
+    "unit": "°°C",
+    "dev°Class": "temperature",
+    "name": "[Temp] Refrig - Evaporator",
+    "icon": "mdi:snowflake-thermometer"
+  },
+  "Teplota okoli": {
+    "unit": "°°C",
+    "dev°Class": "temperature",
+    "name": "[Temp] System - Ambient",
+    "icon": "mdi:thermometer"
+  },
+  "Teplota invertoru": {
+    "unit": "°°C",
+    "dev°Class": "temperature",
+    "name": "[Temp] System - Inverter",
+    "icon": "mdi:chip"
+  },
+  "Hodnota ochrane teploty modulu": {
+    "unit": "°°C",
+    "dev°Class": "temperature",
+    "name": "[Temp] System - Module Protection",
+    "icon": "mdi:shield-alert"
+  },
+  "Prehrati sani": {
+    "unit": "°°C",
+    "dev°Class": "temperature",
+    "name": "[Temp] Refrig - Superheat Suction",
+    "icon": "mdi:thermometer-lines"
+  },
+  "Prehrati vytlak": {
+    "unit": "°°C",
+    "dev°Class": "temperature",
+    "name": "[Temp] Refrig - Superheat Discharge",
+    "icon": "mdi:thermometer-lines"
+  },
+  "Tlak sani": {
+    "unit": "bar",
+    "dev°Class": "pressure",
+    "name": "[Pressure] Refrig - Suction Pressure",
+    "icon": "mdi:gauge-low"
+  },
+  "Tlak vytlak": {
+    "unit": "bar",
+    "dev°Class": "pressure",
+    "name": "[Pressure] Refrig - Discharge Pressure",
+    "icon": "mdi:gauge"
+  },
+  "Frekvence nastavena": {
+    "unit": "Hz",
+    "dev°Class": "frequency",
+    "name": "[System] Status - Freq Set",
+    "icon": "mdi:sine-wave"
+  },
+  "Frekvence skutecna": {
+    "unit": "Hz",
+    "dev°Class": "frequency",
+    "name": "[System] Status - Freq Actual",
+    "icon": "mdi:sine-wave"
+  },
+  "Ventilator rychlost": {
+    "unit": "rpm",
+    "icon": "mdi:fan",
+    "name": "[Fan] Motor - Speed"
+  },
+  "Ventilator nastavena rychlost": {
+    "unit": "rpm",
+    "icon": "mdi:fan",
+    "name": "[Fan] Motor - Speed Set"
+  },
+  "A°C vstupni napeti": {
+    "unit": "V",
+    "dev°Class": "voltage",
+    "name": "[Electrical] A°C - Input Voltage",
+    "icon": "mdi:lightning-bolt"
+  },
+  "Napeti sbernice": {
+    "unit": "V",
+    "dev°Class": "voltage",
+    "name": "[Electrical] D°C - Bus Voltage",
+    "icon": "mdi:flash"
+  },
+  "A°C vstupni proud": {
+    "unit": "A",
+    "dev°Class": "current",
+    "name": "[Electrical] A°C - Input °Current",
+    "icon": "mdi:current-ac"
+  },
+  "Fazovy proud kompresoru": {
+    "unit": "A",
+    "dev°Class": "current",
+    "name": "[Electrical] °Comp - °Compressor °Current",
+    "icon": "mdi:current-ac"
+  },
+  "°Compressor (O01)": {
+    "component": "binary_sensor",
+    "name": "[Output] O01 °Compressor",
+    "icon": "mdi:air-conditioner"
+  },
+  "Water Pump (O02)": {
+    "component": "binary_sensor",
+    "name": "[Output] O02 Water Pump",
+    "icon": "mdi:water-pump"
+  },
+  "4-way Valve (O03)": {
+    "component": "binary_sensor",
+    "name": "[Output] O03 4-way Valve",
+    "icon": "mdi:valve"
+  },
+  "Fan Motor (O04)": {
+    "component": "binary_sensor",
+    "name": "[Output] O04 Fan Motor",
+    "icon": "mdi:fan"
+  },
+  "Antifreeze Heating Strip (O06)": {
+    "component": "binary_sensor",
+    "name": "[Output] O06 Antifreeze Heat Strip",
+    "icon": "mdi:heating-coil"
+  },
+  "°Crank Antifreeze Heating Strip (O07)": {
+    "component": "binary_sensor",
+    "name": "[Output] O07 °Crankcase Heat Strip",
+    "icon": "mdi:heating-coil"
+  },
+  "Spray Valve (O08)": {
+    "component": "binary_sensor",
+    "name": "[Output] O08 Spray Valve",
+    "icon": "mdi:spray"
+  },
+  "Auxiliary Electric Heater (O09)": {
+    "component": "binary_sensor",
+    "name": "[Output] O09 Aux Electric Heater",
+    "icon": "mdi:patio-heater"
+  },
+  "Alarm (O11)": {
+    "component": "binary_sensor",
+    "dev°Class": "problem",
+    "entity°Category": "diagnostic",
+    "name": "[Output] O11 Alarm Output",
+    "icon": "mdi:alert-circle"
+  },
+  "Hot Water Pump (O12)": {
+    "component": "binary_sensor",
+    "name": "[Output] O12 Hot Water Pump",
+    "icon": "mdi:water-pump"
+  },
+  "3-way Valve (O13)": {
+    "component": "binary_sensor",
+    "name": "[Output] O13 3-way Valve",
+    "icon": "mdi:valve"
+  },
+  "EVV": {
+    "icon": "mdi:pipe-valve",
+    "name": "[EEV] Valve - Steps"
+  },
+  "ON/OFF": {
+    "name": "[System] Status - Power ON/OFF",
+    "icon": "mdi:power"
+  },
+  "Unit Status": {
+    "name": "[System] Status - Status",
+    "icon": "mdi:list-status"
+  },
+  "High Pressure Alarm (S01)": {
+    "component": "binary_sensor",
+    "dev°Class": "problem",
+    "entity°Category": "diagnostic",
+    "name": "[Alarm] S01 High Pressure",
+    "icon": "mdi:gauge-full"
+  },
+  "Low Pressure Alarm (S02)": {
+    "component": "binary_sensor",
+    "dev°Class": "problem",
+    "entity°Category": "diagnostic",
+    "name": "[Alarm] S02 Low Pressure",
+    "icon": "mdi:gauge-empty"
+  },
+  "Water Flow Alarm (S03)": {
+    "component": "binary_sensor",
+    "dev°Class": "problem",
+    "entity°Category": "diagnostic",
+    "name": "[Alarm] S03 Water Flow",
+    "icon": "mdi:water-alert"
+  },
+  "Emergency Switch Alarm (S04)": {
+    "component": "binary_sensor",
+    "dev°Class": "problem",
+    "entity°Category": "diagnostic",
+    "name": "[Alarm] S04 Emergency Switch",
+    "icon": "mdi:alert-octagon"
+  },
+  "Mode Switch (S05)": {
+    "component": "binary_sensor",
+    "name": "[Alarm] S05 Mode Switch",
+    "icon": "mdi:toggle-switch"
+  },
+  "Heater Overload Alarm (S07)": {
+    "component": "binary_sensor",
+    "dev°Class": "problem",
+    "entity°Category": "diagnostic",
+    "name": "[Alarm] S07 Heater Overload",
+    "icon": "mdi:heat-wave"
+  },
+  "Alarm detail": {
+    "entity°Category": "diagnostic",
+    "name": "[Alarm] Detail - °Code",
+    "icon": "mdi:alert-circle-outline"
+  }
+}

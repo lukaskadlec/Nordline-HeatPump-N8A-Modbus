@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Nordline Heat Pump (Modbus RTU)",
+        "description": "Select the serial port connected to the RS-485 transceiver of the Nordline N8A heat pump.",
+        "data": {
+          "serial_port": "Serial Port Path",
+          "baudrate": "Baud Rate"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the serial port."
+    },
+    "abort": {
+      "already_configured": "This serial port is already configured."
+    }
+  }
+}
