@@ -7,18 +7,18 @@
 Bidirectional monitoring, telemetry, and full configuration control integration for the **Nordline N8A Air-to-Water Heat Pump** (equipped with the **PC8002 PCB Controller** and **Slave 1 LCD Wall Unit**).
 
 This project offers two implementation paths:
-1. **Native Home Assistant Custom Integration (HACS) [Recommended]**: Direct local serial port connection (`/dev/ttyUSB*`), zero Node-RED or MQTT dependencies, UI Config Flow, native `climate` thermostat entity, 42 telemetry sensors, 21 primary controls, 88 configuration registers, built-in 10-second silence watchdog, and automatic daily EEPROM write protection!
+1. **Native Home Assistant Custom Integration (HACS) [Recommended]**: Direct local serial port connection (`/dev/ttyUSB*`), zero Node-RED or MQTT dependencies, UI Config Flow, native `climate` thermostat entity, 42 telemetry sensors, 21 primary controls, 88 configuration registers, built-in 10-second silence watchdog.
 2. **Node-RED & MQTT Alternative**: Streamlined production flow ([`flows.json`](flows.json)) with all debugging and scratch file-logging removed, communicating via MQTT Discovery.
 
 ---
 
 > [!WARNING]
 > ### ⚠️ IMPORTANT WARNING: Heat Pump Lifespan & EEPROM Write Endurance
-> **Recommended safe daily limit: maximum ~20 writes per day!**
+> **Recommended safe daily limit: maximum ~10 writes per day per parameter!**
 > 
 > The main microcontroller on the **PC8002 PCB** stores all configuration parameter changes (target heating, cooling, and hot water setpoints, operating modes, timers, and service registers) directly into non-volatile **EEPROM** memory. EEPROM chips have a physically finite endurance cycle (typically 100,000 to 1,000,000 write operations per cell before irreversible hardware failure occurs).
 > 
-> - **Hardware Protection**: Keeping parameter changes under **~20 writes/day** guarantees decades of safe operational lifespan.
+> - **Hardware Protection**: Keeping parameter changes under **~10 writes/day per parameter** guarantees decades of safe operational lifespan.
 > - **Warning for Automations**: **Never create high-frequency automation loops** in Home Assistant (e.g., dynamically updating target temperatures every minute based on spot electricity prices, minor room thermostat fluctuations, or outdoor temperature drift).
 > - **Best Practices**: Use hysteresis, batch parameter adjustments, and alter setpoints only during major schedule shifts (e.g., eco/comfort transitions 2–4 times a day).
 
@@ -232,11 +232,11 @@ Entities are structured so they sort logically on Home Assistant device cards:
    - Every received frame is verified with Modbus CRC-16 before decoding or routing.
 4. **Configuration Register Write Limits & EEPROM Protection**:
    > [!WARNING]
-   > **Recommended daily ceiling: maximum ~20 writes per day**
+   > **Recommended daily ceiling: maximum ~10 writes per day per parameter**
    > 
    > The PC8002 PCB microcontroller writes all settings changes directly to internal non-volatile **EEPROM**. Because EEPROM cells endure a limited number of write cycles (typically 100,000 to 1,000,000 writes per memory cell):
    > 
-   > - **Lifespan Protection**: Restricting daily adjustments to approximately 20 writes ensures decades of reliable hardware service.
+   > - **Lifespan Protection**: Restricting daily adjustments to approximately 10 writes per parameter ensures decades of reliable hardware service.
    > - **Automation Caution**: Do not bind heat pump setpoints directly to real-time spot electricity price feeds or aggressive PID controllers that push changes every few seconds or minutes.
    > - **Recommended Usage**: Utilize built-in schedules, apply temperature hysteresis, and group setting updates into daily mode transitions (e.g., night setback vs daytime comfort 2–4 times a day).
 

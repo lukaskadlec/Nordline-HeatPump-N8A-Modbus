@@ -7,18 +7,18 @@
 Obousměrné monitorování, telemetrie a plné konfigurační řízení pro tepelné čerpadlo **Nordline N8A vzduch-voda** (vybavené řídicí deskou **PC8002 PCB** a nástěnnou LCD jednotkou **Slave 1**).
 
 Tento projekt nabízí dvě cesty nasazení:
-1. **Nativní integrace pro Home Assistant (HACS) [Doporučeno]**: Přímé připojení přes lokální sériový port USB (`/dev/ttyUSB*`), nulová závislost na Node-RED či MQTT brokeru, grafická konfigurace (UI Config Flow), nativní termostatová entita `climate`, 42 telemetrických senzorů, 21 primárních ovládacích prvků, 88 konfiguračních registrů, vestavěný 10sekundový watchdog ticha fyzického LCD a automatická denní ochrana paměti EEPROM!
+1. **Nativní integrace pro Home Assistant (HACS) [Doporučeno]**: Přímé připojení přes lokální sériový port USB (`/dev/ttyUSB*`), nulová závislost na Node-RED či MQTT brokeru, grafická konfigurace (UI Config Flow), nativní termostatová entita `climate`, 42 telemetrických senzorů, 21 primárních ovládacích prvků, 88 konfiguračních registrů, vestavěný 10sekundový watchdog ticha fyzického LCD.
 2. **Alternativa přes Node-RED a MQTT**: Odladěný produkční tok ([`flows.json`](flows.json)) s odstraněným laděním a pomocnými zápisy do souborů, komunikující přes MQTT Discovery.
 
 ---
 
 > [!WARNING]
 > ### ⚠️ DŮLEŽITÉ UPOZORNĚNÍ: Životnost tepelného čerpadla a limit zápisů do EEPROM
-> **Doporučený bezpečný denní limit: maximálně ~20 zápisů za den!**
+> **Doporučený bezpečný denní limit: maximálně ~10 zápisů za den jednoho parametru!**
 > 
 > Řídicí mikrokontrolér desky **PC8002 PCB** ukládá veškeré změny konfiguračních parametrů (žádané teploty topení, chlazení a TUV, provozní režimy, časovače a servisní registry) přímo do interní energeticky nezávislé paměti **EEPROM**. Tyto paměťové čipy mají fyzicky konečný počet zápisových cyklů (typicky 100 000 až 1 000 000 přepisů paměťové buňky před jejím trvalým poškozením).
 > 
-> - **Ochrana životnosti hardware**: Omezení změn parametrů na **maximálně 20 zápisů denně** představuje bezpečný limit, který zajistí bezproblémovou a mnohaletou životnost řídicí jednotky tepelného čerpadla.
+> - **Ochrana životnosti hardware**: Omezení změn parametrů na **maximálně 10 zápisů denně na jedno místo** představuje bezpečný limit, který zajistí bezproblémovou a mnohaletou životnost řídicí jednotky tepelného čerpadla.
 > - **Varování pro automatizace**: **Nikdy nevytvářejte vysokofrekvenční automatizační smyčky** v Home Assistant (např. automatické přenastavování požadované teploty každou minutu dle dynamických spotových cen elektřiny, drobných odchylek pokojového termostatu či kolísání venkovní teploty).
 > - **Doporučená praxe**: Využívejte hysterezi, změny parametrů sdružujte a žádané teploty upravujte pouze při hlavních přechodech denního režimu (např. útlum a komfort 2–4× za den).
 
@@ -218,11 +218,11 @@ Entity jsou strukturovány tak, aby se na kartách zařízení Home Assistant p�
    - Každý přijatý rámec je před dekódováním nebo přeposláním ověřen pomocí algoritmu Modbus CRC-16.
 4. **Doporučení pro zápisy do konfiguračních registrů a ochrana paměti EEPROM**:
    > [!WARNING]
-   > **Doporučený denní limit: maximálně ~20 zápisů za den**
+   > **Doporučený denní limit: maximálně ~10 zápisů denně na jedno místo**
    > 
    > Řídicí mikrokontrolér desky PC8002 PCB ukládá veškeré konfigurační parametry (žádané teploty topení, chlazení a TUV, provozní režimy, časovače a pokročilé servisní registry) přímo do interní energeticky nezávislé paměti **EEPROM**. Tyto paměti mají fyzicky omezený počet zápisových cyklů (typicky 100 000 až 1 000 000 přepisů paměťové buňky před jejím nevratným poškozením).
    > 
-   > - **Ochrana životnosti hardware**: Omezení změn parametrů na **maximálně 20 zápisů denně** představuje bezpečný provozní limit, který zajistí bezproblémovou a mnohaletou životnost řídicí jednotky tepelného čerpadla.
+   > - **Ochrana životnosti hardware**: Omezení změn parametrů na **maximálně 10  zápisů denně na jedno místo** představuje bezpečný provozní limit, který zajistí bezproblémovou a mnohaletou životnost řídicí jednotky tepelného čerpadla.
    > - **Varování pro automatizace**: Nikdy nevytvářejte vysokofrekvenční automatizační smyčky v Home Assistant (např. automatické přenastavování požadované teploty každou minutu dle spotových cen elektřiny, drobných odchylek pokojového termostatu či kolísání venkovní teploty).
    > - **Doporučená praxe**: Využívejte hysterezi, změny parametrů sdružujte a teploty upravujte pouze při hlavních přechodech denního režimu (např. útlum a komfort 2–4× za den).
 
