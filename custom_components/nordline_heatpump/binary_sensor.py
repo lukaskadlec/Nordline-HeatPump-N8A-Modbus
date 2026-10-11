@@ -52,8 +52,8 @@ class NordlineHeatPumpBinarySensor(NordlineHeatPumpEntity, BinarySensorEntity):
         dev_class = meta.get("devClass")
         if dev_class == "problem":
             self._attr_device_class = BinarySensorDeviceClass.PROBLEM
-        elif meta.get("name", "").startswith("[Output]"):
-            self._attr_device_class = BinarySensorDeviceClass.RUNNING
+        elif dev_class:
+            self._attr_device_class = dev_class
 
         if meta.get("icon"):
             self._attr_icon = meta["icon"]
