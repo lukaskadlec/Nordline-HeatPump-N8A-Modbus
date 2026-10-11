@@ -36,6 +36,7 @@ TABLE OF CONTENTS
 6. STATE MACHINE FOR EMULATING THE LCD CONTROLLER
    6.1 Operational States & Transitions
    6.2 Startup Auto-Sync (Flag 128) & Write Protection Guard
+   6.3 Bus Coexistence & Physical LCD Guard (10-Second Watchdog)
 7. PASSIVE SNIFFING & HOME ASSISTANT / MQTT INTEGRATION NOTES
 8. RAW HEX / DECIMAL FRAME EXAMPLES WITH CRC VERIFICATION
 9. PARAMETER DISCOVERY WORKFLOW (DIFF-LOGGING IN NORMAL OPERATION)
@@ -706,6 +707,58 @@ To prevent overwriting heat pump settings with blank, zeroed, or unverified defa
    - Once initialized, parameter changes use the live values read during Flag 128
      as the base, modifying only the explicitly requested registers.
 
+--------------------------------------------------------------------------------
+6.3 Bus Coexistence & Physical LCD Guard (10-Second Watchdog)
+--------------------------------------------------------------------------------
+To completely prevent electrical transceiver collisions on the shared RS-485 bus
+between the physical LCD wall controller (Slave 1) and the Node-RED LCD Emulator:
+
+1. Electrical Collision Problem on RS-485:
+   - The Heat Pump Master periodically polls Slave 1 every ~1 second with:
+     [01, 03, 0B, B9, 00, 15] (FC 03, Reg 3001, Qty 21).
+   - If both the physical LCD display unit and Node-RED's emulator attempt to respond
+     to this poll simultaneously, transceiver contention garbles the frame on the wire,
+     causing framing errors and CRC checksum failures.
+
+2. Dynamic 10-Second Watchdog Mechanism:
+   Node-RED implements an active watchdog between node "msg type 01,03,42 Display Reply"
+   (ID: e5329555f3bee408) and "LCD Emulator (Slave 1 Responder)" (ID: b1569ee02102ae62):
+
+   a. Detection of Physical LCD Traffic:
+      - The Display Reply node inspects all incoming bus packets.
+      - When a response starting with [01, 03, 42] arrives from the physical LCD:
+        * Immediately disables emulation: flow.set("lcd_emulator_enabled", false)
+        * Records timestamp: flow.set("lcd_display_reply_last_seen", Date.now())
+        * Updates node visual status: "Real LCD active (Emulation disabled)" (green dot)
+        * Resets/re-arms a 10-second silence timer (setTimeout) in context memory.
+
+   b. 10-Second Silence Trigger (Automatic Failover):
+      - If no [01, 03, 42] reply is received for 10 consecutive seconds (e.g. physical
+        display is disconnected, powered down, or absent):
+        * The 10-second timer expires.
+        * Enables emulation: flow.set("lcd_emulator_enabled", true)
+        * Updates node visual status: "No reply for 10s -> Emulation enabled" (yellow ring)
+        * The LCD emulator takes over answering Slave 1 polls seamlessly.
+
+   c. Immediate Disabling on Physical Reconnection:
+      - If the physical LCD display is reconnected or powered on at any time, the very
+        first [01, 03, 42] packet received immediately disables emulation:
+        flow.set("lcd_emulator_enabled", false), guaranteeing zero bus contention.
+
+3. Emulator Fail-Safe Dual Guard (Node b1569ee02102ae62):
+   - Before replying to any Master poll or processing any Modbus frame, the emulator
+     evaluates elapsed silence:
+     const timeSinceReply = Date.now() - (flow.get("lcd_display_reply_last_seen") || 0);
+     if (timeSinceReply < 10000) {
+         flow.set("lcd_emulator_enabled", false);
+         return null; // Bus silence
+     }
+   - Startup Grace Period: On flow boot / deploy, a 10-second silence grace period
+     is enforced (flow.set("lcd_display_reply_last_seen", Date.now())) so Node-RED waits
+     silently to determine if a physical LCD is present before transmitting.
+   - Command Safety: Startup inject ("start_flag_128") queues Flag 128 (0x8000) into
+     memory without prematurely overriding the 10-second silence evaluation.
+
 
 ================================================================================
 7. PASSIVE SNIFFING & HOME ASSISTANT / MQTT INTEGRATION NOTES
@@ -889,7 +942,10 @@ is implemented in Node-RED:
 
 1. Setup:
    - Heat Pump Master and real LCD panel communicate normally on RS-485.
-   - Node-RED runs with LCD Emulator DISABLED (passive sniffing only, no collisions).
+   - Node-RED runs with automatic 10-second LCD watchdog enabled:
+     * As long as the real LCD replies with [01, 03, 42], emulation is kept automatically
+       DISABLED, ensuring 100% passive sniffing with zero risk of bus collision.
+     * If the real LCD is unplugged for >10s, Node-RED seamlessly assumes emulation.
    - Node "Detect & Log Config Register Changes" listens to incoming frames.
 
 2. Process:

@@ -49,15 +49,15 @@ Start Address Confirmation Registers:
 ================================================================================
 Group Prefix     | Category Description                   | Display Screen Tab          | Access Level (Manual)
 -----------------+----------------------------------------+-----------------------------+----------------------
-H (H01..H13)     | System Configuration                   | System (Screens 11, 14)     | Manufacturer         
-A (A01..A06)     | Safety & Antifreeze Protection         | Protect (Screen 15)         | Manufacturer         
-F (F01..F15)     | Fan Motor & Quiet Mode Control         | Fan (Screens 16, 17, 18)    | Manufacturer / User  
-D (D01..D11)     | Defrost Parameters                     | Defrost (Screens 19, 20)    | Manufacturer / User  
-E (E01..E20)     | Electronic Expansion Valve (EEV)       | EEV (Screens 21, 23, 24)    | Manufacturer / User  
-G (G01..G04)     | High Temp Disinfection (Legionella)    | High Temp. Disinf. (Scr 31) | Manufacturer         
-P (P01..P05)     | Water Circulation Pump Control         | Pump (Screens 29, 30)       | Manufacturer / User  
-R (R01..R22)     | Temperature Setpoints & Heating Curves | Temp (Screens 25, 26, 28)   | Manufacturer / User  
-Timer (T01..T06) | System ON / OFF Daily Timer Clock      | Timer (Screen 3)            | User                 
+H (H01..H13)     | System Configuration                   | System                      | Manufacturer         
+A (A01..A06)     | Safety & Antifreeze Protection         | Protect                     | Manufacturer         
+F (F01..F15)     | Fan Motor & Quiet Mode Control         | Fan                         | Manufacturer / User  
+D (D01..D11)     | Defrost Parameters                     | Defrost                     | Manufacturer / User  
+E (E01..E20)     | Electronic Expansion Valve (EEV)       | EEV                         | Manufacturer / User  
+G (G01..G04)     | High Temp Disinfection (Legionella)    | High Temp. Disinf.          | Manufacturer         
+P (P01..P05)     | Water Circulation Pump Control         | Pump                        | Manufacturer / User  
+R (R01..R22)     | Temperature Setpoints & Heating Curves | Temp                        | Manufacturer / User  
+Timer (T01..T06) | System ON / OFF Daily Timer Clock      | Timer                       | User                 
 
 Menu Passwords on LCD Controller:
 - Code "066" or "66" : Factory / Manufacturer Parameters Access 
@@ -97,14 +97,14 @@ taxonomy:
    - [Temp]    : Diff, Limit, Heater, Curve
    Entity IDs (object_id): hp_<slug> (e.g. number.hp_temp_curve_r17_compensation_on_low_at)
 
-3. Status & Telemetry Sensors (41 entities in HA "Sensors" and "Diagnostic" cards):
+3. Status & Telemetry Sensors (42 entities in HA "Sensors" and "Diagnostic" cards):
    Format: "[Group] Sub - Name / ID"
    - [Temp]       : Water (Inlet, Outlet, Boiler), Refrig (Suction, Discharge, Evaporator, Superheat), System (Ambient, Inverter, Module Protection)
    - [Pressure]   : Refrig (Suction Pressure, Discharge Pressure)
    - [Electrical] : AC (Voltage, Current), DC (Bus Voltage), Comp (Compressor Current)
    - [Fan]        : Motor (Speed, Speed Set)
    - [EEV]        : Valve (Steps)
-   - [System]     : Status (Freq Set, Freq Actual, Power ON/OFF)
+   - [System]     : Status (Freq Set, Freq Actual, Power ON/OFF, Status)
    - [Output]     : Digital Relays O01 .. O13
    - [Alarm]      : Diagnostic & Safety S01 .. S07, Detail (Code)
 
@@ -320,52 +320,13 @@ captured Modbus RTU payload buffers and the official manufacturer manual:
      1 = Off-heat water
      (Current packet: 1 -> Display value: Off-heat water)
 
-3. System Timer (Screenshot 3):
+3. System Timer:
    - Timer ON: Hour 16, Min 0 -> Reg 1255 = 1 (Active), Reg 1256 = 16, Reg 1259 = 0
    - Timer OFF: Hour 20, Min 0 -> Reg 1257 = 1 (Active), Reg 1258 = 20, Reg 1260 = 0
 
 
 ================================================================================
-5. CORRECTIONS TO INITIAL HYPOTHESES IN heatpump_rs485_protocol_spec.txt
-================================================================================
-Early reverse-engineering speculative guesses in heatpump_rs485_protocol_spec.txt 
-have now been conclusively verified and corrected by the official manual:
-
-Previous Speculation                       | Correct Reality (from Display Screenshots & Manual)       
--------------------------------------------+-----------------------------------------------------------
-Reg 1021: "0=Off-heating, 1=On-heating"    | H04: 0 = On-heating, 1 = Off-heating                      
-Reg 1022: "0=Off-heat water, 1=On-water"   | H05: 0 = On-heat water, 1 = Off-heat water                
-Reg 1040: "DHW setpoint (50 °C)"           | A01: Antifreeze Temp (5.0 °C, scale 0.1)                  
-Reg 1043: "Heating curve lower limit"      | A04: Shutdown Ambient Temp (-20.0 °C)                     
-Reg 1045: "Heating water setpoint"         | A06: Spray Valve Open Temp (35.0 °C)                      
-Reg 1060: "Target temp limit (30.0 °C)"    | F02: Min Speed in Heating (300 rpm)                       
-Reg 1069: "Room temp setpoint (22 °C)"     | F11: Mute Timer Start Hour (22 h)                         
-Reg 1070: Unknown / internal state (1)     | F12: Mute Timer End Hour (1 h)                            
-Reg 1071: "Heating circuit target (45 °C)" | F13: Mute Mode Fan Speed (450 rpm)                        
-Reg 1072: "Max allowed temp limit (60 °C)" | F14: DC/EC Fan Rated Speed (600 rpm)                      
-Reg 1101: "15.0 °C operating param"        | D01: Exit Defrosting Setpoint (15.0 °C)                   
-Reg 1102: "25.0 °C operating param"        | D02: Exit Defrosting Pressure (25.0 bar)                  
-Reg 1105: "59"                             | D05: Sliding High Point Under LP (5.9 bar)                
-Reg 1106: "28"                             | D06: Sliding Low Point Under LP (2.8 bar)                 
-Reg 1107: "40"                             | D07: Sliding High Point of AT (4.0 °C)                    
-Reg 1108: "-15.0 °C operating param"       | D08: Sliding Low Point of AT (-15.0 °C)                   
-Reg 1136: "480"                            | E10: Defrost Steps (480 N)                                
-Reg 1138: "480"                            | E12: Initial Steps in Cooling (480 N)                     
-Reg 1139: "60"                             | E13: Exhaust Assist Open Time (60 min)                    
-Reg 1140: "24"                             | E14: Suction Superheat Open Time (24 min)                 
-Reg 1160: "650"                            | G01: Disinfection Setpoint (65.0 °C)                      
-Reg 1163: "30"                             | G04: Disinfection Work Cycle (30 Days)                    
-Reg 1167: "1"                              | P01: Pump Running Mode (1 = Special)                      
-Reg 1168: "30"                             | P02: Pump Running Interval Time (30 min)                  
-Reg 1169: "3"                              | P03: Pump Running Duration (3 min)                        
-Reg 1170: "3"                              | P04: Pump Advanced Start Time (3 min)                     
-Reg 1205: "45"                             | R15: Delay of Electric-heater (45 min)                    
-Reg 1209..1212: "Slope limits"             | R19..R22: Weather Compensation Setpoint & Slope Parameters
-Reg 1255..1258: "Mode flags"               | T01..T04: System Timer ON/OFF Hours and States            
-
-
-================================================================================
-6. MAIN CONFIGURATION REGISTERS FOR USER INTERFACE (PRIMARY CONTROLS)
+5. MAIN CONFIGURATION REGISTERS FOR USER INTERFACE (PRIMARY CONTROLS)
 ================================================================================
 
 The following table lists the primary user-facing configuration registers 
@@ -397,10 +358,10 @@ Reg  | Modbus Hex | Block (Flag)   | UI Parameter Name           | Allowed Value
 
 
 ================================================================================
-7. OPERATIONAL CONTROL LOGIC & SAFETY THRESHOLDS (FROM MANUAL)
+6. OPERATIONAL CONTROL LOGIC & SAFETY THRESHOLDS (FROM MANUAL)
 ================================================================================
 
-7.1 Antifreeze Protection (Parameters A01..A04):
+6.1 Antifreeze Protection (Parameters A01..A04):
 - Cooling Mode: After compressor start, outlet water temp T02 is monitored.
   If T02 < A01 (default 5.0 °C) OR suction pressure < A02 (default 2.0 bar) for 10s,
   unit enters antifreeze protection (after compressor has run 5 minutes).
@@ -416,7 +377,7 @@ Reg  | Modbus Hex | Block (Flag)   | UI Parameter Name           | Allowed Value
   will not start heat pump compressor. (Does not inhibit auxiliary electric heater; if
   heater runs, pump must run). Resumes when T07 > A04 + 2.0 °C.
 
-7.2 Defrosting Control Logic (Parameters D01..D11):
+6.2 Defrosting Control Logic (Parameters D01..D11):
 - Defrost Initiation:
   1. Monitored 1 minute after compressor starts. If suction pressure < D05 (sliding low
      pressure threshold, default 5.3 bar / -12 °C), timed defrost countdown begins.
@@ -432,7 +393,7 @@ Reg  | Modbus Hex | Block (Flag)   | UI Parameter Name           | Allowed Value
   T06 > D01 (default 13.0 °C), OR when maximum defrost time D04 (default 8 min) elapses.
   Unit then drops to 30 Hz, reverses 4-way valve, restarts fan after 55s, and ramps up.
 
-7.3 Electronic Expansion Valve Control (Parameters E01..E20):
+6.3 Electronic Expansion Valve Control (Parameters E01..E20):
 - Compressor Start: EEV maintains initial position for the first 3 minutes.
   Initial heating steps = E05 (default 350 N) if ambient T07 >= 0 °C, or E05 + 50 N if T07 < 0 °C.
 - After 3 minutes, automatic PID regulation takes over targeting superheat E02 (default 5.0 °C)
@@ -440,7 +401,7 @@ Reg  | Modbus Hex | Block (Flag)   | UI Parameter Name           | Allowed Value
 - Unit Shutdown: EEV opens to 480 steps for 2 minutes, then completely closes to 0 steps.
 - Post-Defrost: EEV returns to initial position for 3 minutes before superheat PID re-engages.
 
-7.4 Circulation Water Pump Staging (Parameters P01..P05):
+6.4 Circulation Water Pump Staging (Parameters P01..P05):
 - Lead & Overrun Timing: Pump starts at least P04 (default 1 min) before the compressor starts,
   and continues running for 2 minutes after the compressor stops.
 - Flow Switch Guard: Controller begins monitoring water flow switch S03 after P04 - 10s.
@@ -450,7 +411,7 @@ Reg  | Modbus Hex | Block (Flag)   | UI Parameter Name           | Allowed Value
   * 1 = Special (Linked with compressor + overrun)
   * 2 = Interval (Cycle interval P02 with run duration P03)
 
-7.5 Weather Compensation Heating Curves (Parameters R17..R22):
+6.5 Weather Compensation Heating Curves (Parameters R17..R22):
 - Low Ambient Temp Curve:
   * R17 = Compensation-ON Low AT (Default 0.0 °C or -30.0 °C)
   * R18 = Compensation-OFF Low AT (Default -30.0 °C)
@@ -462,10 +423,10 @@ Reg  | Modbus Hex | Block (Flag)   | UI Parameter Name           | Allowed Value
 
 
 ================================================================================
-8. HARDWARE I/O SPECIFICATION (CODE 022) & CORRESPONDING TELEMETRY REGISTERS
+7. HARDWARE I/O SPECIFICATION (CODE 022) & CORRESPONDING TELEMETRY REGISTERS
 ================================================================================
 
-8.1 Digital Outputs (Relays - 5A / 250VAC):
+7.1 Digital Outputs (Relays - 5A / 250VAC):
 ID  | Terminal | Equipment Name                   | Modbus Telemetry Bit  | Logic / Active State          
 ----+----------+----------------------------------+-----------------------+-------------------------------
 O01 | RO01     | Compressor Inverter Drive Enable | Reg 2019 Bit 0 (LSB)  | 1 = ON, 0 = OFF               
@@ -483,7 +444,7 @@ O12 | RO12     | DHW Water Circulation Pump       | Reg 2019 Bit 11 (MSB) | 1 = 
 O13 | RO13     | 3-way Diverting Valve (DHW/Heat) | Reg 2019 Bit 12 (MSB) | 1 = DHW, 0 = Space Heat       
 O14 | -        | Electronic Expansion Valve Steps | Reg 2020 (0-500 N)    | 0 .. 500 Steps (Actuator)     
 
-8.2 Digital Inputs & Safety Switches:
+7.2 Digital Inputs & Safety Switches:
 ID  | Terminal | Switch Name                      | Modbus Register Bit | Logic / Active State                    
 ----+----------+----------------------------------+---------------------+-----------------------------------------
 S01 | AI/DI 23 | High Pressure Switch             | Reg 2034 Bit 0      | 0 = Closed (OK), 1 = Open (Fault)       
@@ -499,7 +460,7 @@ Active Fault Code Register:
 - Register 2085 (Byte Offsets 175-176) carries the active numerical error/fault code
   when any alarm occurs (e.g. E11, E12, E032, F01..F26).
 
-8.3 Analog Temperature & Pressure Sensors:
+7.3 Analog Temperature & Pressure Sensors:
 ID  | Terminal | Sensor Name                        | Sensor Type / Curve    | Modbus Reg | Scale  
 ----+----------+------------------------------------+------------------------+------------+--------
 T01 | AI/DI 01 | Inlet Water Temperature            | NTC 5kΩ @ 25°C         | Reg 2045   | 0.1 °C 
@@ -512,7 +473,7 @@ T07 | AI/DI 07 | Outdoor Ambient Temperature        | NTC 5kΩ @ 25°C         |
 T08 | AI/DI 21 | Suction Low Pressure Transducer    | Ratiometric (0-20 bar) | Reg 2052   | 0.1 bar
 T09 | AI/DI 22 | Discharge High Pressure Transducer | Ratiometric (0-50 bar) | Reg 2053   | 0.1 bar
 
-8.4 Inverter, Electrical & Fan Telemetry Status:
+7.4 Inverter, Electrical & Fan Telemetry Status:
 ID  | Parameter Name                  | Description / Subsystem                  | Modbus Reg | Scale / Unit
 ----+---------------------------------+------------------------------------------+------------+-------------
 T10 | Actual Compressor Frequency     | Live inverter compressor frequency       | Reg 2054   | 1.0 Hz      
@@ -531,7 +492,7 @@ T22 | Target Fan Speed                | Controller requested fan motor speed    
 
 
 ================================================================================
-9. COMPREHENSIVE FAULT & ALARM CODE MATRIX (MANUAL SPECIFICATION)
+8. COMPREHENSIVE FAULT & ALARM CODE MATRIX (MANUAL SPECIFICATION)
 ================================================================================
 When a safety protection trips or a component enters a fault state, the heat pump
 main controller registers an alarm. The alarm is displayed on the physical LCD display,
@@ -540,7 +501,7 @@ broadcast via telemetry (Register 2085 and Register 2034 bitfield), and triggers
 the general alarm output relay RO11 (Register 2019 Bit 10).
 
 --------------------------------------------------------------------------------
-9.1 Temperature & Pressure Sensor Fault Codes (P-Codes & PP-Codes)
+8.1 Temperature & Pressure Sensor Fault Codes (P-Codes & PP-Codes)
 --------------------------------------------------------------------------------
 Code | Subsystem / Function     | Fault Description                | Cause / Condition                  | Recovery / Remedy                        
 -----+--------------------------+----------------------------------+------------------------------------+------------------------------------------
@@ -556,7 +517,7 @@ PP1  | Pressure (High Side)     | Discharge High Pressure Sensor   | Pressure tr
 PP2  | Pressure (Low Side)      | Suction Low Pressure Sensor      | Pressure transducer faulty/broken  | Check / replace transducer T08 (0-20 bar)
 
 --------------------------------------------------------------------------------
-9.2 System Safety & Operational Protection Codes (E-Codes)
+8.2 System Safety & Operational Protection Codes (E-Codes)
 --------------------------------------------------------------------------------
 Code | Subsystem / Function          | Fault Description                | Cause / Condition                   | Recovery / Remedy                   
 -----+-------------------------------+----------------------------------+-------------------------------------+-------------------------------------
@@ -576,7 +537,7 @@ F031 | Fan Drive (Motor 1)           | DC Fan Motor 1 Fault             | Rotor 
 F032 | Fan Drive (Motor 2)           | DC Fan Motor 2 Fault             | Rotor locked or wiring disconnected | Check / replace Fan Motor 2         
 
 --------------------------------------------------------------------------------
-9.3 Inverter Driver & Power Supply Fault Codes (F-Codes)
+8.3 Inverter Driver & Power Supply Fault Codes (F-Codes)
 --------------------------------------------------------------------------------
 Code | Subsystem / Function    | Fault Description                 | Cause / Condition                   | Recovery / Remedy                      
 -----+-------------------------+-----------------------------------+-------------------------------------+----------------------------------------
@@ -605,7 +566,7 @@ F26  | Power Electronics       | IGBT Power Switch Overheat        | IGBT sensor
 
 
 ================================================================================
-10. CONTROLLER HARDWARE, SENSOR TYPES & TERMINAL WIRING (PC8002 PCB)
+9. CONTROLLER HARDWARE, SENSOR TYPES & TERMINAL WIRING (PC8002 PCB)
 ================================================================================
 Main PCB Model      : PC8002 (Board assembly: 35005-310738 + 35005-310739)
 Microcontroller     : Dedicated DSP + MCU architecture
