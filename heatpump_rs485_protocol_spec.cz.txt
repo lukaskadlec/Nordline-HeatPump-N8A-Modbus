@@ -1,0 +1,988 @@
+================================================================================
+REVERZNĚ INŽENÝRSKÁ SPECIFIKACE PROTOKOLU RS485 / MODBUS RTU
+KOMUNIKAČNÍ SBĚRNICE TEPELNÉHO ČERPADLA VZDUCH-VODA NORDLINE (N8A)
+================================================================================
+Verze dokumentu   : 1.2.0
+Datum             : 2026-10-10
+Autor             : Tým reverzního inženýrství a synchronizace s manuálem
+Umístění souboru  : c:\Dev\Lukas\Nordline-HeatPump-N8A-Modbus\heatpump_rs485_protocol_spec.cz.txt
+Anglický originál : heatpump_rs485_protocol_spec.txt
+Referenční registr: heatpump_configuration_registers.cz.txt / heatpump_configuration_registers.txt
+Referenční manuál : Nordline_N8A_Manual.pdf (Řídicí deska PC8002 PCB / 35005-310738 + 35005-310739)
+Cílová skupina    : AI vývojáři (LLM), vývojáři firmwaru, integrátoři Home Assistant / ESPHome
+Formát            : Textová referenční specifikace
+Jazyk             : Čeština (překlad technické specifikace)
+
+--------------------------------------------------------------------------------
+OBSAH
+--------------------------------------------------------------------------------
+1. KONFIGURACE FYZICKÉ A LINKOVÉ VRSTVY
+2. ARCHITEKTURA SYSTÉMU A ÚČASTNÍCI NA SBĚRNICI
+3. PŘEHLED CYKLICKÉ KOMUNIKACE (POLLINGOVÝ CYKLUS)
+4. PODROBNÁ SPECIFIKACE ZPRÁV
+   4.1 Všesměrové vysílání Master část A (Stav a telemetrie - Reg 2001..2090)
+   4.2 Všesměrové vysílání Master část B (Řízení systému a synchronizace - Reg 2091..2180)
+   4.3 Dotazování na LCD displej a heartbeat (Slave 1, Reg 3001..3021)
+   4.4 Handshake synchronizace nastavení (Displej -> Master)
+   4.5 Handshake úplné inicializace systému (Flag 128 / 0x8000 kompletní vyčtení)
+   4.6 Komunikace s motory / invertory (Slave 4 a 5)
+5. MAPY REGISTRŮ A BITOVÁ POLE
+   5.1 Telemetrické registry vysílání část A (Reg 2001..2090)
+   5.2 Bitové pole digitálních výstupů (Relé) (Bajtové offsety 43-44 / Reg 2019)
+   5.3 Digitální vstupy a bezpečnostní spínače (Reg 2034 / Bajtové offsety 73-74) & Registr alarmu (Reg 2085)
+   5.4 Struktura rámce dotazování LCD displeje (Reg 3001..3021)
+   5.5 Blok 1 dat nastavení (Reg 1001..1090) - Flag 0x0002
+   5.6 Blok 2 dat nastavení (Reg 1091..1180) - Flag 0x0004
+   5.7 Blok 3 dat nastavení (Reg 1181..1270) - Flag 0x0008
+   5.8 Hlavní konfigurační registry pro uživatelské rozhraní (UI prvky)
+   5.9 Kompletní matice chybových kódů a alarmů (dle manuálu)
+   5.10 Hardware řídicí desky, typy senzorů a zapojení svorek (PC8002 PCB)
+6. STAVOVÝ AUTOMAT PRO EMULACI LCD OVLADAČE
+   6.1 Provozní stavy a přechody
+   6.2 Automatická synchronizace při startu (Flag 128) a ochrana proti zápisu
+   6.3 Koexistence na sběrnici a ochrana fyzického LCD (10sekundový watchdog)
+7. PASIVNÍ ODPOSLECH A POZNÁMKY K INTEGRACI DO HOME ASSISTANT / MQTT
+   7.1 Pasivní odposlech a telemetrické veličiny (Vysílání část A a B)
+   7.2 Obousměrná integrace konfiguračních registrů přes Home Assistant MQTT
+8. PŘÍKLADY SUROVÝCH RÁMCŮ V HEX/DEC VČETNĚ OVĚŘENÍ CRC
+9. PRACOVNÍ POSTUP OBJEVOVÁNÍ PARAMETRŮ (DIFF-LOGGING V BĚŽNÉM PROVOZU)
+
+
+================================================================================
+1. KONFIGURACE FYZICKÉ A LINKOVÉ VRSTVY
+================================================================================
+Rozhraní sběrnice  : RS-485 (dvoudrát, Half-Duplex, diferenciální linky A/B)
+Port zařízení Linux: /dev/ttyUSB-TC (USB-RS485 převodník)
+Přenosová rychlost : 9600 bps
+Datové bity        : 8
+Parita             : Žádná (None - N)
+Stop bity          : 1
+Řízení toku        : Žádné (None)
+Standard rámce     : Modbus RTU
+Pořadí bajtů       : Big-Endian (MSB nejprve) pro 16bitová slova registrů
+Algoritmus CRC     : Modbus CRC-16 (Polynom: 0xA001, Init: 0xFFFF, Low-Bajt první)
+
+Výpočet CRC v JavaScriptu (Referenční kód):
+-------------------------------------------
+function calculateCRC(buf, length) {
+    let crc = 0xFFFF;
+    for (let pos = 0; pos < length; pos++) {
+        crc ^= buf[pos];
+        for (let i = 8; i !== 0; i--) {
+            if ((crc & 0x0001) !== 0) {
+                crc = (crc >> 1) ^ 0xA001;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    return crc; // low bajt: crc & 0xFF, high bajt: (crc >> 8) & 0xFF
+}
+
+
+================================================================================
+2. ARCHITEKTURA SYSTÉMU A ÚČASTNÍCI NA SBĚRNICI
+================================================================================
+Hlavní řídicí deska tepelného čerpadla (PC8002 PCB) funguje jako Modbus MASTER.
+Všechny ostatní připojené moduly vystupují jako Modbus SLAVE jednotky.
+
+Adresy zařízení / Slave:
+------------------------
+- Adresa 0x00 (0)  : Modbus Broadcast (Vysílá Master všem jednotkám; žádný Slave neodpovídá)
+- Adresa 0x01 (1)  : Hlavní ovládací panel / modul nástěnného LCD displeje
+- Adresa 0x02 (2)  : Sekundární ovládací panel / rozšiřující displej (volitelný/dotazovaný)
+- Adresa 0x04 (4)  : Pohon kompresoru / řídicí deska invertoru 1
+- Adresa 0x05 (5)  : Motor ventilátoru / deska pohonu 2
+
+Topologie:
+----------
+  +-----------------------------------------------------------+
+  |                   RS-485 Sběrnice (9600 8N1)              |
+  +----+-------------+-----------------+-------------+--------+
+       |             |                 |             |
++------+-----+ +-----+------+    +-----+------+ +----+-------+
+| Hlavní PCB | | LCD displej|    | Invertor 1 | | Invertor 2 |
+|  čerpadla  | |  (Slave 1) |    |  (Slave 4) | |  (Slave 5) |
+|  [MASTER]  | +------------+    +------------+ +------------+
++------------+
+
+
+================================================================================
+3. PŘEHLED CYKLICKÉ KOMUNIKACE (POLLINGOVÝ CYKLUS)
+================================================================================
+Řídicí deska (Master) provozuje aktivní dotazovací smyčku s periodou přibližně 1 sekunda.
+Běžná sekvence probíhá v tomto pořadí:
+
+1. Všesměrové vysílání stavu část A (Adresa 0, FC 16, Reg 2001, 90 reg. / 180 bajtů)
+2. Všesměrové vysílání stavu část B (Adresa 0, FC 16, Reg 2091, 90 reg. / 180 bajtů)
+3. Dotaz na LCD displej (Adresa 1, FC 03, Reg 3001, 21 reg. / 42 bajtů)
+   -> LCD odpovídá paketem heartbeat + příznak stavu/události + reálný čas RTC.
+4. Pokud LCD nahlásí příznak události / změny v Registru 3011:
+   - Příznak 0x0002 : Spustí synchronizaci Bloku 1 nastavení (Reg 1001..1090)
+   - Příznak 0x0004 : Spustí synchronizaci Bloku 2 nastavení (Reg 1091..1180)
+   - Příznak 0x0008 : Spustí synchronizaci Bloku 3 nastavení (Reg 1181..1270)
+   - Příznak 0x8000 : Kompletní inicializace / plná synchronizace všech 3 bloků (Reg 1001..1270)
+   -> Master provede odpovídající synchronizační handshake.
+5. Dotaz na sekundární displej, je-li konfigurován (Adresa 2, FC 03, Reg 3001, 21 reg.).
+6. Dotaz na Invertor 1 (Adresa 4, FC 03, Reg 1011, 14 reg.) -> Invertor 1 odpovídá (28 bajtů).
+7. Příkaz pro Invertor 1 (Adresa 4, FC 16, cílová frekvence).
+8. Dotaz na Invertor 2 (Adresa 5, FC 03, Reg 1011, 14 reg.) -> Invertor 2 odpovídá (28 bajtů).
+
+
+================================================================================
+4. PODROBNÁ SPECIFIKACE ZPRÁV
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1 Všesměrové vysílání Master část A (Stav a telemetrie)
+--------------------------------------------------------------------------------
+Směr      : Master -> Všesměrové vysílání Broadcast (Odezva se neočekává)
+Funkce    : Modbus FC 16 (0x10) - Zápis více registrů (Write Multiple Registers)
+Záhlaví   : [00, 16, 07, 209, 00, 90, 180] -> [0x00, 0x10, 0x07, 0xD1, 0x00, 0x5A, 0xB4]
+            - Slave adresa     : 0 (Broadcast)
+            - Funkční kód      : 16 (0x10)
+            - Počáteční registr: 2001 (0x07D1)
+            - Počet registrů   : 90 (0x005A)
+            - Počet bajtů      : 180 (0xB4)
+Data      : 180 bajtů živé telemetrie (teploty, tlaky, relé, EEV, elektrické veličiny).
+CRC       : 2 bajty Modbus CRC-16.
+Celk.délka: 189 bajtů.
+
+--------------------------------------------------------------------------------
+4.2 Všesměrové vysílání Master část B (Řízení systému a synchronizace)
+--------------------------------------------------------------------------------
+Směr      : Master -> Všesměrové vysílání Broadcast (Odezva se neočekává)
+Funkce    : Modbus FC 16 (0x10) - Zápis více registrů (Write Multiple Registers)
+Záhlaví   : [00, 16, 08, 43, 00, 90, 180] -> [0x00, 0x10, 0x08, 0x2B, 0x00, 0x5A, 0xB4]
+            - Slave adresa     : 0 (Broadcast)
+            - Funkční kód      : 16 (0x10)
+            - Počáteční registr: 2091 (0x082B)
+            - Počet registrů   : 90 (0x005A)
+            - Počet bajtů      : 180 (0xB4)
+Klíčové offsety v rámci bufferu:
+- Offset 25 (2 bajty) : Potvrzovací hodnota registru 2091
+- Offset 33 (2 bajty) : Konstanta 15 (0x000F)
+- Offset 35 (2 bajty) : Konstanta 738 (0x02E2)
+- Offset 37 (2 bajty) : Přepínací stav (0 nebo 1), mění se každých několik minut
+- Offset 39 (2 bajty) : Magické synchronizační slovo: 0x5AA5 (23205 dec)
+
+--------------------------------------------------------------------------------
+4.3 Dotazování na LCD displej a heartbeat (Slave 1)
+--------------------------------------------------------------------------------
+Směr      : Master -> Slave 1 (Dotaz / Poll)
+Požadavek : [01, 03, 11, 185, 00, 21, 87, 196] -> [0x01, 0x03, 0x0B, 0xB9, 0x00, 0x15, 0x57, 0xC4]
+            - Slave ID         : 1
+            - Funkční kód      : 3 (Read Holding Registers)
+            - Počáteční adresa : 3001 (0x0BB9)
+            - Počet registrů   : 21 (0x0015)
+            - CRC-16           : 0x57 0xC4
+
+Směr      : Slave 1 -> Master (Odpověď)
+Formát    : [01, 03, 42, <42 datových bajtů>, <CRC_LOW>, <CRC_HIGH>] (Celkem 47 bajtů)
+            - Slave ID         : 1
+            - Funkční kód      : 3
+            - Počet bajtů      : 42 (0x2A = 21 registrů * 2)
+            - Bajty [3..22]    : Řídicí a stavové registry (Reg 3001..3010), většinou 0x00.
+            - Offset 23-24     : Registr události / spouštěče (Reg 3011, Big-Endian):
+                                 * 0x0000 = Klidový stav (Idle), žádná změna.
+                                 * 0x0002 = Změna Bloku 1 nastavení (Reg 1001..1090).
+                                 * 0x0004 = Změna Bloku 2 nastavení (Reg 1091..1180).
+                                 * 0x0008 = Změna Bloku 3 nastavení (Reg 1181..1270).
+                                 * 0x8000 = Spuštění plné inicializace / resynchronizace
+                                            (bajt 23 = 128 / 0x80, bajt 24 = 0).
+            - Bajty [35..44]   : Reálný čas (RTC) vysílaný z LCD displeje:
+                                 * Offset 35-36: Rok % 100 (např. 26 pro rok 2026)
+                                 * Offset 37-38: Měsíc (1-12)
+                                 * Offset 39-40: Den v měsíci (1-31)
+                                 * Offset 41-42: Hodina (0-23)
+                                 * Offset 43-44: Minuta (0-59)
+
+--------------------------------------------------------------------------------
+4.4 Handshake synchronizace nastavení (Displej -> Master)
+--------------------------------------------------------------------------------
+Při úpravě parametrů v konkrétním bloku Registr 3011 uvědomí Master:
+
+- Blok 1 (Příznak 0x0002): Master synchronizuje 90 registrů od adresy 1001 (0x03E9).
+- Blok 2 (Příznak 0x0004): Master synchronizuje 90 registrů od adresy 1091 (0x0443).
+- Blok 3 (Příznak 0x0008): Master synchronizuje 90 registrů od adresy 1181 (0x049D).
+
+Průběh synchronizace jednoho bloku:
+1. LCD nastaví příznak (0x0002, 0x0004 nebo 0x0008) v Registru 3011 při odpovědi na dotaz.
+2. Master si vyžádá data přes FC 03 Read NEBO zapíše data přes FC 16 Write.
+3. LCD přenese nebo potvrdí 180 bajtů konfiguračních dat.
+4. Master odešle FC 16 pro vymazání Registru 3011: [01, 16, 0B, C3, 00, 01, 02, 00, 00, 0D, A3].
+5. LCD potvrdí zápis ozvěnou FC 16: [01, 16, 0B, C3, 00, 01, F3, D1].
+Handshake je dokončen; sběrnice se vrací do klidového dotazování 1 Hz.
+
+--------------------------------------------------------------------------------
+4.5 Handshake úplné inicializace systému (Flag 128 / 0x8000 kompletní vyčtení)
+--------------------------------------------------------------------------------
+Když se LCD ovladač zapne, restartuje nebo vyžádá kompletní načtení parametrů,
+nastaví Registr 3011 na hodnotu 0x8000 (bajt 23 = 128, bajt 24 = 0).
+
+Master odpoví postupným zápisem VŠECH TŘÍ bloků parametrů
+(270 souvislých registrů: 1001 až 1270) pomocí Modbus FC 16:
+
+Krok 1: LCD nahlásí příznak 0x8000 v odpovědi na periodický dotaz
+        [01, 03, 42, 0,0,..., 128,0, ..., RTC, CRC]
+
+Krok 2: Master zapíše Blok 1 (Reg 1001..1090)
+        Master -> LCD: [01, 16, 03, E9, 00, 5A, B4, <180 bajtů>, CRC]
+        LCD -> Master: [01, 16, 03, E9, 00, 5A, CRC] (Potvrzovací ozvěna)
+
+Krok 3: Master zapíše Blok 2 (Reg 1091..1180)
+        Master -> LCD: [01, 16, 04, 43, 00, 5A, B4, <180 bajtů>, CRC]
+        LCD -> Master: [01, 16, 04, 43, 00, 5A, CRC] (Potvrzovací ozvěna)
+
+Krok 4: Master zapíše Blok 3 (Reg 1181..1270)
+        Master -> LCD: [01, 16, 04, 9D, 00, 5A, B4, <180 bajtů>, CRC]
+        LCD -> Master: [01, 16, 04, 9D, 00, 5A, CRC] (Potvrzovací ozvěna)
+
+Krok 5: Master vymaže Registr 3011 zpět na 0
+        Master -> LCD: [01, 16, 0B, C3, 00, 01, 02, 00, 00, CRC]
+        LCD -> Master: [01, 16, 0B, C3, 00, 01, CRC] (Potvrzovací ozvěna)
+
+Všech 270 konfiguračních parametrů je nyní plně synchronizováno v paměti!
+
+--------------------------------------------------------------------------------
+4.6 Komunikace s motory / invertory (Slave 4 a 5)
+--------------------------------------------------------------------------------
+1. Dotazování na Invertor 1 (Pohon kompresoru):
+   Master -> Slave 4: [04, 03, 03, 243, 00, 14, CRC_L, CRC_H]
+   Slave 4 -> Master: [04, 03, 28, <28 bajtů dat>, CRC_L, CRC_H]
+
+2. Řízení Invertoru 1 (Příkaz frekvence):
+   Master -> Slave 4: [04, 16, 03, ...] (FC 16 zápis cílové frekvence).
+
+3. Dotazování na Invertor 2 (Pohon motoru ventilátoru):
+   Master -> Slave 5: [05, 03, 03, 243, 00, 14, CRC_L, CRC_H]
+   Slave 5 -> Master: [05, 03, 28, <28 bajtů dat>, CRC_L, CRC_H]
+
+
+================================================================================
+5. MAPY REGISTRŮ A BITOVÁ POLE
+================================================================================
+
+--------------------------------------------------------------------------------
+5.1 Telemetrické registry vysílání část A (Reg 2001..2090)
+--------------------------------------------------------------------------------
+Offset  | Modbus Reg | Název / Popis                    | Typ      | Měřítko / Jednotka
+--------+------------+----------------------------------+----------+-------------------
+7       | 2001       | Surový stav / Režim Parametr 1   | int16_be | surová hodnota
+9       | 2002       | Surový stav / Režim Parametr 2   | int16_be | surová hodnota
+11      | 2003       | Surový stav / Režim Parametr 3   | int16_be | surová hodnota
+13      | 2004       | Surový stav / Režim Parametr 4   | int16_be | surová hodnota
+15      | 2005       | Surový stav / Režim Parametr 5   | int16_be | surová hodnota
+17      | 2006       | Surový stav / Režim Parametr 6   | int16_be | surová hodnota
+19      | 2007       | Surový stav / Režim Parametr 7   | int16_be | surová hodnota
+21      | 2008       | Surový stav / Režim Parametr 8   | int16_be | surová hodnota
+23      | 2009       | Surový stav / Režim Parametr 9   | int16_be | surová hodnota
+25      | 2010       | Surový stav / Režim Parametr 10  | int16_be | surová hodnota
+27      | 2011       | Hlavní vypínač napájení (ON/OFF) | int16_be | 0=Vypnuto, 1=Zapnuto
+29      | 2012       | Příznak provozního režimu        | int16_be | surová hodnota
+31..41  | 2013..2018 | Interní provozní stavy           | int16_be | surová hodnota
+43      | 2019 (MSB) | Digitální výstupy část 2 (Relé)  | bitfield | Viz sekce 5.2
+44      | 2019 (LSB) | Digitální výstupy část 1 (Relé)  | bitfield | Viz sekce 5.2
+45      | 2020       | Elektronický expanzní ventil EEV | int16_be | kroky otevření (0-500)
+47..71  | 2021..2033 | Sekundární stavové parametry     | int16_be | surová hodnota
+73..74  | 2034       | Digitální vstupy (S01..S07)      | bitfield | Viz sekce 5.3
+75..93  | 2035..2044 | Interní stavy řízení             | int16_be | surová hodnota
+95      | 2045       | Teplota vstupní vody (T01)       | int16_be | 0.1 °C (/10)
+97      | 2046       | Teplota výstupní vody (T02)      | int16_be | 0.1 °C (/10)
+99      | 2047       | Teplota výtlačných plynů (T03)   | int16_be | 0.1 °C (/10)
+101     | 2048       | Teplota v nádrži TUV / bojler(T04| int16_be | 0.1 °C (/10)
+103     | 2049       | Teplota nasávaných plynů (T05)   | int16_be | 0.1 °C (/10)
+105     | 2050       | Teplota výparníku (T06)          | int16_be | 0.1 °C (/10)
+107     | 2051       | Venkovní teplota okolí (T07)     | int16_be | 0.1 °C (/10)
+109     | 2052       | Tlak na sání LP (T08)            | int16_be | 0.1 bar (/10)
+111     | 2053       | Tlak na výtlaku HP (T09)         | int16_be | 0.1 bar (/10)
+113     | 2054       | Skutečná frekvence komp. (T10)   | int16_be | 1.0 Hz
+115     | 2055       | Cílová frekvence kompresoru (T11)| int16_be | 1.0 Hz
+117     | 2056       | Skutečné otáčky ventilátoru 1(T12| uint16_be| ot./min (rpm)
+119     | 2057       | Skutečné otáčky ventilátoru 2(T13| uint16_be| ot./min (rpm)
+121     | 2058       | Přehřátí na sání (T14)           | int16_be | 0.1 °C (/10)
+123     | 2059       | Přehřátí na výtlaku (T15)        | int16_be | 0.1 °C (/10)
+125     | 2060       | Ochranná teplota modulu IPM (T16)| int16_be | 0.1 °C (/10)
+127     | 2061       | Vstupní napětí sítě AC (T17)     | uint16_be| 1.0 V
+129     | 2062       | Vstupní proud sítě AC (T18)      | uint16_be| 0.1 A (/10)
+131     | 2063       | Fázový proud kompresoru (T19)    | uint16_be| 0.1 A (/10)
+133     | 2064       | Napětí DC sběrnice (T20)         | uint16_be| 1.0 V
+135     | 2065       | Teplota modulu IPM/PIM (T21)     | int16_be | 0.1 °C (/10)
+137     | 2066       | Stav sekundárního ventilátoru    | uint16_be| surová hodnota
+139     | 2067       | Cílové otáčky ventilátoru (T22)  | uint16_be| ot./min (Reg 2067 dle manuálu)
+175..176| 2085       | Registr aktivního kódu alarmu    | uint16_be| Viz sekce 5.9
+
+--------------------------------------------------------------------------------
+5.2 Bitové pole digitálních výstupů (Relé) (Bajtové offsety 43-44)
+--------------------------------------------------------------------------------
+Bajtový offset 44 (Dolní bajt LSB / Skupina relé 1):
+  Bit 0 (0x01) : Povolení pohonu kompresoru (O01)        [1 = ZAP, 0 = VYP]
+  Bit 1 (0x02) : Primární oběhové čerpadlo vody (O02)    [1 = ZAP, 0 = VYP]
+  Bit 2 (0x04) : 4cestný reverzační ventil (O03)         [1 = ZAP (Top/Odmraz), 0 = VYP]
+  Bit 3 (0x08) : Relé motoru ventilátoru (O04)           [1 = ZAP, 0 = VYP]
+  Bit 4 (0x10) : Rezervováno
+  Bit 5 (0x20) : Topný kabel vany kondenzátu (O06)       [1 = ZAP, 0 = VYP]
+  Bit 6 (0x40) : Topný kabel karteru kompresoru (O07)    [1 = ZAP, 0 = VYP]
+  Bit 7 (0x80) : Vstřikovací / sprejový ventil (O08)     [1 = ZAP, 0 = VYP]
+
+Bajtový offset 43 (Horní bajt MSB / Skupina relé 2):
+  Bit 0 (0x01) : Pomocný záložní elektrokotel (O09)      [1 = ZAP, 0 = VYP]
+  Bit 1 (0x02) : Rezervováno
+  Bit 2 (0x04) : Výstupní signál souhrnného alarmu (O11) [1 = ALARM, 0 = OK]
+  Bit 3 (0x08) : Cirkulační čerpadlo TUV (O12)           [1 = ZAP, 0 = VYP]
+  Bit 4 (0x10) : 3cestný přepínací ventil TUV/Top (O13)  [1 = TUV, 0 = Topení]
+  Bit 5..7     : Rezervováno
+
+--------------------------------------------------------------------------------
+5.3 Digitální vstupy a bezpečnostní spínače (Reg 2034) & Registr alarmu (Reg 2085)
+--------------------------------------------------------------------------------
+[DŮLEŽITÁ OPRAVA PROTOKOLU]:
+Původní analýza telemetrie předpokládala, že fyzické spínače S01..S08 sídlí v
+Registru 2085 (bajtový offset 176). Oficiální servisní manuál Nordline N8A
+(strany 28-29, 37) jednoznačně potvrzuje, že hardwarové bezpečnostní spínače
+sídlí v Registru 2034 (offsety 73-74, kde bajt 74 je LSB), zatímco Registr 2085
+nese aktivní číselný kód chyby / ID alarmu.
+
+Bitové pole Registru 2034 (Hardwarové digitální vstupy / Bezpečnostní spínače S01..S07):
+Bajtový offset 74 (Registr 2034 dolní bajt / LSB):
+  Bit 0 (0x01 / 2034/0) : Spínač vysokého tlaku (S01 / AI/DI 23)   [0 = Sepnuto/OK, 1 = Rozepnuto/Chyba]
+  Bit 1 (0x02 / 2034/1) : Spínač nízkého tlaku (S02 / AI/DI 24)    [0 = Sepnuto/OK, 1 = Rozepnuto/Chyba]
+  Bit 2 (0x04 / 2034/2) : Průtokový spínač vody (S03 / AI/DI 25)   [0 = Sepnuto/Průtok OK, 1 = Bez průtoku]
+  Bit 3 (0x08 / 2034/3) : Nouzový / dálkový spínač (S04 / AI/DI 26)[0 = Sepnuto/Chod, 1 = Rozepnuto/Stop]
+  Bit 4 (0x10 / 2034/4) : Přepínač režimu (S05 / AI/DI 27)         [0 = Sepnuto/Topení, 1 = Rozepnuto/Chl]
+  Bit 5 (0x20 / 2034/5) : Rezervováno (S06)
+  Bit 6 (0x40 / 2034/6) : Ochrana přetížení el.dohřevu(S07/AI/DI29)[0 = Sepnuto/OK, 1 = Rozepnuto/Chyba]
+  Bit 7 (0x80 / 2034/7) : Rezervováno (S08)
+
+Bajtový offset 73 (Registr 2034 horní bajt / MSB):
+  Bity 8..15            : Interní stavové binární příznaky řídicí desky.
+
+Registr aktivního kódu poruchy (Registr 2085 / Bajtové offsety 175-176):
+  Nese aktivní číselný kód chyby nebo ochrany při výskytu alarmu.
+  Offset 175 (MSB) : Kategorie alarmu / dílčí kód
+  Offset 176 (LSB) : Identifikační kód chyby (Mapováno na chybové kódy v sekci 5.9:
+                     např. E11 = Vysoký tlak, E12 = Nízký tlak, E032 = Průtok, F01..F26 = Invertor).
+
+--------------------------------------------------------------------------------
+5.4 Struktura rámce dotazování LCD displeje (Reg 3001..3021)
+--------------------------------------------------------------------------------
+Celková délka odpovědního bufferu = 47 bajtů (Záhlaví 3 bajty + 42 datových bajtů + 2 CRC bajty).
+
+Offset | Modbus Reg | Funkce / Popis
+-------+------------+-----------------------------------------------------------
+0      | -          | Slave adresa: 0x01
+1      | -          | Funkční kód: 0x03
+2      | -          | Počet bajtů: 0x2A (42 bajtů)
+3..22  | 3001..3010 | Rezervováno / Stavová slova (převážně 0x0000)
+23..24 | 3011       | Registr události / Spouštěč (Big-Endian):
+       |            |   0x0000 = Klidový stav (Idle, běžný heartbeat)
+       |            |   0x0002 = Požadavek na synchronizaci Bloku 1 (Reg 1001..1090)
+       |            |   0x0004 = Požadavek na synchronizaci Bloku 2 (Reg 1091..1180)
+       |            |   0x0008 = Požadavek na synchronizaci Bloku 3 (Reg 1181..1270)
+       |            |   0x8000 = Kompletní inicializace / plná synchronizace parametrů
+       |            |            (nastaven MSB, bajt 23 = 128 / 0x80, bajt 24 = 0)
+25..34 | 3012..3016 | Rezervováno (nuly)
+35..36 | 3017       | Reálný čas RTC: Rok % 100 (např. 26 -> 2026)
+37..38 | 3018       | Reálný čas RTC: Měsíc (1 - 12)
+39..40 | 3019       | Reálný čas RTC: Den v měsíci (1 - 31)
+41..42 | 3020       | Reálný čas RTC: Hodina (0 - 23)
+43..44 | 3021       | Reálný čas RTC: Minuta (0 - 59)
+45..46 | -          | Modbus CRC-16 (Low bajt, High bajt)
+
+--------------------------------------------------------------------------------
+5.5 Blok 1 dat nastavení (Reg 1001..1090) - Vyvolán příznakem 0x0002
+--------------------------------------------------------------------------------
+Vyčítán / zapisován přes FC 03 nebo FC 16: Počáteční adresa = 1001 (0x03E9), Počet = 90 registrů.
+Obsahuje konfiguraci systému (H), bezpečnostní ochrany (A), ventilátor a tichý režim (F)
+a hlavní ovládací prvky UI:
+- Reg 1010: Potvrzení počáteční adresy = 1001 (0x03E9)
+- Reg 1011: Stav - Hlavní vypínač napájení (0 = Vypnuto, 1 = Zapnuto) [Hlavní ovládání UI]
+- Reg 1012: Režim - Provozní režim (0 = TUV, 1 = Topení, 2 = Chlazení,
+            3 = TUV + Topení, 4 = TUV + Chlazení) [Hlavní ovládání UI]
+- Reg 1018: Autostart (H01: výčet 0=Ne, 1=Ano)
+- Reg 1019: Jednotka Master/Slave (H02: výčet 0=Master, 1=Slave)
+- Reg 1020: Jednotka teploty (H03: výčet 0=°C, 1=°F)
+- Reg 1021: Polarita 4cestného ventilu (H04: výčet 0=Sepnut při topení, 1=Rozepnut při topení)
+- Reg 1022: Polarita 3cestného ventilu (H05: výčet 0=Sepnut při TUV, 1=Rozepnut při TUV)
+- Reg 1023..1030: PID invertoru a limity frekvence (H06..H13)
+- Reg 1031: Elektrický dohřev (H14: 0 = Vypnuto, 1 = Zapnuto) [Spínač přídavného elektrokotle]
+- Reg 1032: Modbus adresa jednotky (H15: 1)
+- Reg 1040: Protimrazová teplota (A01: 50 -> 5.0 °C, měřítko 0.1)
+- Reg 1041: Protimrazový nízký tlak (A02: 20 -> 2.0 bar, měřítko 0.1)
+- Reg 1042: Protimrazový rozdíl teplot (A03: 20 -> 2.0 °C, měřítko 0.1)
+- Reg 1043: Venkovní teplota odstavení (A04: -200 -> -20.0 °C, signed int16, měřítko 0.1)
+- Reg 1044: Bezpečná teplota výtlaku (A05: 1100 -> 110.0 °C, měřítko 0.1)
+- Reg 1045: Teplota otevření vstřikovacího ventilu (A06: 350 -> 35.0 °C, měřítko 0.1)
+- Reg 1059: Max. otáčky při topení (F01: 800 ot./min)
+- Reg 1060: Min. otáčky při topení (F02: 300 ot./min)
+- Reg 1061..1066: Limity tlaků sání a výtlaku pro řízení ventilátoru (F03..F08)
+- Reg 1067: Ruční otáčky ventilátoru (F09: 0 ot./min)
+- Reg 1068: Časovač tichého režimu (F10: 0 = Vypnuto/Ne, 1 = Zapnuto/Ano) [Ovládání tichého režimu]
+- Reg 1069: Hodina začátku tichého režimu (F11: 0 .. 23 h, výchozí 22) [Ovládání tichého režimu]
+- Reg 1070: Hodina konce tichého režimu (F12: 0 .. 23 h, výchozí 1) [Ovládání tichého režimu]
+- Reg 1071: Otáčky ventilátoru v tichém režimu (F13: 450 ot./min)
+- Reg 1072: Jmenovité otáčky DC/EC ventilátoru (F14: 600 ot./min)
+- Reg 1073: Typ motoru ventilátoru (F15: 1)
+- Reg 1074: Rychlý tichý režim Fast Mute (0 = Vypnuto, 1 = Zapnuto na 8 hod) [Ovládání tichého režimu]
+
+--------------------------------------------------------------------------------
+5.6 Blok 2 dat nastavení (Reg 1091..1180) - Vyvolán příznakem 0x0004
+--------------------------------------------------------------------------------
+Vyčítán / zapisován přes FC 03 nebo FC 16: Počáteční adresa = 1091 (0x0443), Počet = 90 registrů.
+Obsahuje nastavení odmrazování (D), elektronického expanzního ventilu EEV (E), dezinfekce (G)
+a oběhového čerpadla (P):
+- Reg 1100: Potvrzení počáteční adresy = 1091 (0x0443)
+- Reg 1101: Teplota ukončení odmrazování (D01: 15.0 °C)
+- Reg 1102: Tlak ukončení odmrazování (D02: 25.0 bar)
+- Reg 1103..1111: Křivky odmrazování, intervaly cyklů a klouzavé body (D03..D11)
+- Reg 1127..1146: Kroky otevření a přehřátí expanzního ventilu EEV (E01..E20)
+- Reg 1160..1163: Teplota a pracovní cyklus vysokoteplotní dezinfekce Legionelly (G01..G04)
+- Reg 1167..1171: Provozní režim, intervaly a doba běhu oběhového čerpadla (P01..P05)
+
+--------------------------------------------------------------------------------
+5.7 Blok 3 dat nastavení (Reg 1181..1270) - Vyvolán příznakem 0x0008
+--------------------------------------------------------------------------------
+Vyčítán / zapisován přes FC 03 nebo FC 16: Počáteční adresa = 1181 (0x049D), Počet = 90 registrů.
+Obsahuje požadované teploty a ekvitermní křivky (R) a plány denních časovačů:
+- Reg 1190: Potvrzení počáteční adresy = 1181 (0x049D)
+- Reg 1191: Požadovaná teplota TUV (R01 / Cílová teplota bojleru: 50.5 °C, měřítko 0.1, krok 0.5 °C) [Hlavní ovládání UI]
+- Reg 1192: Požadovaná teplota topení (R02: 22.0 °C, měřítko 0.1, rozsah 20..50 °C) [Hlavní ovládání UI]
+- Reg 1193: Požadovaná teplota chlazení (R03: 20.0 °C, měřítko 0.1, rozsah 12..20 °C) [Hlavní ovládání UI]
+- Reg 1194..1195: Hystereze návratu po zapnutí a pohotovosti (R04..R05: 3.0 °C)
+- Reg 1196..1201: Min/Max limity žádaných teplot pro TUV, topení a chlazení (R06..R11)
+- Reg 1202: Režim elektrického dohřevu (R12: výčet 0=Nepoužito, 1=Topný okruh, 2=Nádrž TUV)
+- Reg 1203..1206: Teplotní diference spuštění a zpoždění elektrického dohřevu (R13..R16)
+- Reg 1207..1212: Parametry sklonu a limitů ekvitermní topné křivky (R17..R22)
+- Reg 1255: Povolení časovače 1 ZAP (T01: výčet 0=Vypnuto, 1=Zapnuto) [Ovládání Časovače 1]
+- Reg 1256: Hodina časovače 1 ZAP (T02: 0 .. 23 h, výchozí 16) [Ovládání Časovače 1]
+- Reg 1257: Povolení časovače 2 VYP (T03: výčet 0=Vypnuto, 1=Zapnuto) [Ovládání Časovače 2]
+- Reg 1258: Hodina časovače 2 VYP (T04: 0 .. 23 h, výchozí 20) [Ovládání Časovače 2]
+- Reg 1259: Minuta časovače 1 ZAP (T05: 0 .. 59 min, výchozí 0) [Ovládání Časovače 1]
+- Reg 1260: Minuta časovače 2 VYP (T06: 0 .. 59 min, výchozí 0) [Ovládání Časovače 2]
+- Reg 1261: Minuta začátku tichého režimu (0 .. 59 min, tvoří pár s Reg 1069) [Ovládání tichého režimu]
+- Reg 1262: Minuta konce tichého režimu (0 .. 59 min, tvoří pár s Reg 1070) [Ovládání tichého režimu]
+
+--------------------------------------------------------------------------------
+5.8 Hlavní konfigurační registry pro uživatelské rozhraní (UI prvky)
+--------------------------------------------------------------------------------
+Následující tabulka souhrnně uvádí primární konfigurační registry určené pro
+ovládací rozhraní (Lovelace dashboard v Home Assistant, webové UI, dotykový displej).
+Tyto registry řídí stav napájení, provozní režim, žádané teploty, tichý režim
+a denní plány časovačů.
+
+Modbus Reg | Hex Addr | Blok (Příznak) | Uživatelský název          | Povolené hodnoty / Výčty / Rozsah                        | Měřítko| Krok  | Jedn.| Doporučený prvek UI      | Klíč entity v HA
+-----------+----------+----------------+----------------------------+----------------------------------------------------------+--------+-------+------+--------------------------+------------------------------
+1011       | 0x03EB   | Blok 1 (0x02)  | Stav napájení (ON/OFF)     | 0 = Vypnuto, 1 = Zapnuto                                 | 1      | 1     | -    | Přepínač (Toggle Switch) | switch.hp_power_state
+1012       | 0x03EC   | Blok 1 (0x02)  | Provozní režim             | 0 = TUV, 1 = Topení, 2 = Chlazení,                       | 1      | 1     | -    | Výběrové pole (Select)   | select.hp_operating_mode
+           |          |                |                            | 3 = TUV + Topení, 4 = TUV + Chlazení                     |        |       |      |                          |
+1031       | 0x03FF   | Blok 1 (0x02)  | Elektrický dohřev (H14)    | 0 = Vypnuto, 1 = Zapnuto                                 | 1      | 1     | -    | Přepínač (Toggle Switch) | switch.hp_electric_heater
+1074       | 0x0432   | Blok 1 (0x02)  | Rychlý tichý režim (Fast)  | 0 = Vypnuto, 1 = Zapnuto (Aktivní 8 hod)                 | 1      | 1     | -    | Přepínač (Toggle Switch) | switch.hp_fast_mute
+1068       | 0x042C   | Blok 1 (0x02)  | Časovač tichého rež. (F10) | 0 = Vypnuto (Ne), 1 = Zapnuto (Ano)                      | 1      | 1     | -    | Přepínač (Toggle Switch) | switch.hp_mute_timer_enable
+1069       | 0x042D   | Blok 1 (0x02)  | Začátek tichého - hod(F11) | 0 .. 23                                                  | 1      | 1     | h    | Číselník / Čas (HH)      | number.hp_mute_start_hour
+1261       | 0x04ED   | Blok 3 (0x08)  | Začátek tichého - min      | 0 .. 59                                                  | 1      | 1     | min  | Číselník / Čas (MM)      | number.hp_mute_start_minute
+1070       | 0x042E   | Blok 1 (0x02)  | Konec tichého - hod (F12)  | 0 .. 23                                                  | 1      | 1     | h    | Číselník / Čas (HH)      | number.hp_mute_end_hour
+1262       | 0x04EE   | Blok 3 (0x08)  | Konec tichého - min        | 0 .. 59                                                  | 1      | 1     | min  | Číselník / Čas (MM)      | number.hp_mute_end_minute
+1191       | 0x04A7   | Blok 3 (0x08)  | Požadovaná teplota TUV(R01)| R06 .. R07 (Rozsah: 40.0 .. 65.0, tovární: 55.0)         | 0.1    | 0.5   | °C   | Číselník / Termostat     | number.hp_boiler_target_temp
+1192       | 0x04A8   | Blok 3 (0x08)  | Požadovaná tepl.topení(R02)| R08 .. R09 (Rozsah: 20.0 .. 50.0, tovární: 40.0)         | 0.1    | 0.5   | °C   | Číselník / Termostat     | number.hp_heating_target_temp
+1193       | 0x04A9   | Blok 3 (0x08)  | Požadovaná tepl.chlaz.(R03)| R10 .. R11 (Rozsah: 12.0 .. 20.0, tovární: 12.0)         | 0.1    | 0.5   | °C   | Číselník / Termostat     | number.hp_cooling_target_temp
+1255       | 0x04E7   | Blok 3 (0x08)  | Povolení časovače 1 ZAP(T01| 0 = Vypnuto, 1 = Zapnuto                                  | 1      | 1     | -    | Přepínač (Toggle Switch) | switch.hp_timer_1_enable
+1256       | 0x04E8   | Blok 3 (0x08)  | Časovač 1 ZAP - hodina(T02)| 0 .. 23                                                  | 1      | 1     | h    | Číselník / Čas (HH)      | number.hp_timer_1_hour
+1259       | 0x04EB   | Blok 3 (0x08)  | Časovač 1 ZAP - minuta(T05)| 0 .. 59                                                  | 1      | 1     | min  | Číselník / Čas (MM)      | number.hp_timer_1_minute
+1257       | 0x04E9   | Blok 3 (0x08)  | Povolení časovače 2 VYP(T03| 0 = Vypnuto, 1 = Zapnuto                                  | 1      | 1     | -    | Přepínač (Toggle Switch) | switch.hp_timer_2_enable
+1258       | 0x04EA   | Blok 3 (0x08)  | Časovač 2 VYP - hodina(T04)| 0 .. 23                                                  | 1      | 1     | h    | Číselník / Čas (HH)      | number.hp_timer_2_hour
+1260       | 0x04EC   | Blok 3 (0x08)  | Časovač 2 VYP - minuta(T06)| 0 .. 59                                                  | 1      | 1     | min  | Číselník / Čas (MM)      | number.hp_timer_2_minute
+1167       | 0x048F   | Blok 2 (0x04)  | Režim běhu čerpadla (P01)  | 0 = Běžný, 1 = Speciální, 2 = Interval                   | 1      | 1     | -    | Výběrové pole (Select)   | select.hp_pump_running_mode
+1168       | 0x0490   | Blok 2 (0x04)  | Interval běhu čerpadla(P02)| 0 .. 120                                                 | 1      | 1     | min  | Číselník / Posuvník      | number.hp_pump_running_interval
+1169       | 0x0491   | Blok 2 (0x04)  | Doba běhu čerpadla (P03)   | 0 .. 30                                                  | 1      | 1     | min  | Číselník / Posuvník      | number.hp_pump_running_duration
+
+Doporučení pro implementaci v uživatelském rozhraní:
+1. Rozdělená architektura plánovače tichého režimu:
+   - Čas zahájení (HH:MM) je rozdělen mezi dva Modbus bloky:
+     * Hodina: Registr 1069 (Blok nastavení 1, Příznak 0x0002)
+     * Minuta: Registr 1261 (Blok nastavení 3, Příznak 0x0008)
+   - Čas ukončení (HH:MM) je rozdělen mezi dva Modbus bloky:
+     * Hodina: Registr 1070 (Blok nastavení 1, Příznak 0x0002)
+     * Minuta: Registr 1262 (Blok nastavení 3, Příznak 0x0008)
+   - Uživatelské rozhraní může nabídnout jednotný prvek výběru času HH:MM tím, že
+     zapíše příslušné hodnoty do obou registrů.
+
+2. Denní časovače 1 a 2:
+   - Časovač 1 (Auto-ZAP) i Časovač 2 (Auto-VYP) se nacházejí výhradně v Bloku 3 (Příznak 0x0008).
+   - Změna stavu zapnutí nebo času vyvolá pouze jeden synchronizační handshake s příznakem 8.
+
+3. Stav napájení a přepínání režimu:
+   - Stav (1011) i Režim (1012) sídlí v Bloku nastavení 1 (Příznak 0x0002).
+   - Při zapnutí/vypnutí čerpadla nebo změně režimu z Home Assistant odešlete Masteru Příznak 2.
+
+4. Řízení oběhového čerpadla vody:
+   - Sídlí v Bloku nastavení 2 (Příznak 0x0004) - Reg 1167 (Režim), Reg 1168 (Interval), Reg 1169 (Doba běhu).
+
+
+================================================================================
+5.9 KOMPLETNÍ MATICE CHYBOVÝCH KÓDŮ A ALARMŮ (DLE MANUÁLU)
+================================================================================
+Při sepnutí bezpečnostní ochrany nebo poruše komponenty hlavní deska čerpadla
+zaregistruje alarm. Alarm se zobrazí na fyzickém LCD displeji, uloží do historie
+poruch (obrazovka "Failure Logging", přístup 066 / 022), vysílá se přes telemetrii
+(Registr 2085 a bitové pole Registru 2034) a spíná relé souhrnného alarmu RO11
+(Registr 2019 Bit 10).
+
+--------------------------------------------------------------------------------
+5.9.1 Kódy poruch senzorů teploty a tlaku (P-kódy a PP-kódy)
+--------------------------------------------------------------------------------
+Kód   | Subsystém / Funkce                 | Popis poruchy                    | Příčina / Podmínka                  | Náprava / Odstranění závady
+------+------------------------------------+----------------------------------+-------------------------------------+----------------------------------
+P01   | Vodní okruh (Vstup)                | Porucha čidla vstupní vody       | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit T01 (NTC 5k)
+P02   | Vodní okruh (Výstup)               | Porucha čidla výstupní vody      | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit T02 (NTC 5k)
+P03   | Vodní okruh (Nádrž TUV)            | Čidlo teploty v nádrži TUV       | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit T04 (NTC 10k)
+P04   | Okolí (Venkovní)                   | Čidlo venkovní teploty okolí     | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit T07 (NTC 5k)
+P17   | Chladivo (Sání)                    | Porucha čidla teploty sání plynů | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit T05 (NTC 5k)
+P153  | Chladivo (Výparník)                | Čidlo teploty výparníku          | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit T06 (NTC 5k)
+P181  | Chladivo (Výtlak)                  | Porucha čidla teploty výtlaku    | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit T03 (NTC 50k)
+P182  | Chladivo (Přehřátí)                | Porucha čidla přehřátí výtlaku   | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit T03
+PP1   | Tlak (Vysokotlaká strana)          | Čidlo vysokého tlaku na výtlaku  | Tlakový převodník vadný/přerušený   | Zkontrolovat / vyměnit T09 (0-50 bar)
+PP2   | Tlak (Nízkotlaká strana)           | Čidlo nízkého tlaku na sání      | Tlakový převodník vadný/přerušený   | Zkontrolovat / vyměnit T08 (0-20 bar)
+
+--------------------------------------------------------------------------------
+5.9.2 Bezpečnostní a provozní ochranné kódy systému (E-kódy)
+--------------------------------------------------------------------------------
+Kód   | Subsystém / Funkce                 | Popis poruchy                    | Příčina / Podmínka                  | Náprava / Odstranění závady
+------+------------------------------------+----------------------------------+-------------------------------------+----------------------------------
+TP    | Tepelná ochrana                    | Ochrana nízké venkovní teploty   | Venkovní teplota T07 < A04 (-20 °C) | Auto restart, když T07 > A04 + 2 °C
+E04   | Elektrický obvod                   | Přehřátí elektrického okruhu     | Přetížení kompresoru / horký obvod  | Zkontrolovat zatížení kompresoru
+E06   | Vodní soustava                     | Nadměrný rozdíl teplot vody      | Velký rozdíl teplot mezi T01 a T02  | Zkontrolovat průtok, čerpadlo, bypass
+E08   | Komunikace                         | Komunikace deska <-> LCD displej | Závada komunikačního kabelu/vedení  | Zkontrolovat sběrnici RS-485 / spoje
+E11   | Bezpečn. spínač (Vysokotlak)       | Spínač ochrany vysokého tlaku    | Rozepnut spínač vysokého tlaku S01  | Zkontrolovat chladivový okruh a S01
+E12   | Bezpečn. spínač (Nízkotlak)        | Spínač ochrany nízkého tlaku     | Rozepnut spínač nízkého tlaku S02   | Zkontrolovat chladivový okruh a S02
+E19   | Protimrazová ochrana               | Primární protimrazová ochrana    | Nízká teplota, T02 < A01 (5 °C)     | Běží čerpadlo, reset: T02 > A01+A03
+E29   | Protimrazová ochrana               | Sekundární protimrazová ochrana  | Kriticky nízká venkovní teplota     | Stupňovitá ochrana proti zamrznutí
+E032  | Bezpečnost průtoku vody            | Ochrana průtokového spínače      | Průtokový spínač S03 rozepnut       | Zkontrolovat oběh vody, čerpadlo
+E051  | Ochrana kompresoru                 | Proudové přetížení kompresoru    | Nadměrný provozní proud kompresoru  | Zkontrolovat kompresor a napájení
+E171  | Bezpečnost vodní soustavy          | Ochrana průtoku při nemrzn. rež. | Nedostatečný průtok při topení      | Zkontrolovat potrubí, ventily, filtr
+E081  | Komunikace ventilátoru             | Komunikace řízení ventilátoru    | Ztráta komunikace desky s pohonem   | Zkontrolovat kabel RS-485 k pohonu
+F031  | Pohon ventilátoru (Motor 1)        | Porucha DC motoru ventilátoru 1  | Zablokovaný rotor nebo odpojeno     | Zkontrolovat / vyměnit Motor 1
+F032  | Pohon ventilátoru (Motor 2)        | Porucha DC motoru ventilátoru 2  | Zablokovaný rotor nebo odpojeno     | Zkontrolovat / vyměnit Motor 2
+
+--------------------------------------------------------------------------------
+5.9.3 Poruchové kódy invertoru a napájecího zdroje (F-kódy)
+--------------------------------------------------------------------------------
+Kód   | Subsystém / Funkce                 | Popis poruchy                    | Příčina / Podmínka                  | Náprava / Odstranění závady
+------+------------------------------------+----------------------------------+-------------------------------------+----------------------------------
+F01   | Invertor kompresoru                | Ztráta fáze / Chyba hardwaru poh.| Vadný krok/hardware pohonu kompres. | Zkontrolovat napětí a desku inv.
+F03   | Výkonová elektronika               | Obvod korekce účiníku (PFC)      | Vybavení PFC obvodu / spálená poj.  | Zkontrolovat pojistku a obvod PFC
+F05   | Napájení (DC sběrnice)             | Přepětí na DC meziobvodu         | Napětí DC sběrnice > mez přepětí    | Zkontrolovat vstupní AC a DC sběrnici
+F06   | Napájení (DC sběrnice)             | Podpětí na DC meziobvodu         | Napětí DC sběrnice < mez podpětí    | Zkontrolovat vstupní AC a DC sběrnici
+F07   | Napájení (Vstup AC)                | Podpětí na vstupu AC / Nízký prou| Příliš nízké vstupní napětí         | Zkontrolovat napájecí síť AC
+F08   | Napájení (Vstup AC)                | Nadproud na vstupu AC / Přepětí  | Příliš vysoké vstupní napětí/proud  | Zkontrolovat napájecí síť AC
+F09   | Výkonový modul IPM                 | Nadproud modulu IPM / Vzorkování | Nadměrný proud IPM / chyba měření   | Zkontrolovat proudové obvody IPM
+F10   | Interní sběrnice                   | Chyba komunikace DSP s PFC       | Uvolněný spoj mezi DSP a PFC deskou | Zkontrolovat interní konektory
+F11   | Mikrokontrolér                     | Interní chyba komunikace DSP     | Selhání interní komunikace DSP      | Zkontrolovat desku řízení DSP
+F12   | Komunikace                         | Chyba komunikace desky invertoru | Výpadek linky mezi invertorem a PCB | Zkontrolovat RS-485 inv. (Slave 4)
+F13   | Výkonový modul IPM                 | Odstavení z přehřátí modulu IPM  | Teplota chladiče / IPM moc vysoká   | Zkontrolovat pastu, chlazení
+F14   | Motor kompresoru                   | Slabý magnetismus kompresoru     | Oslabení magnetického toku motoru   | Zkontrolovat motor kompresoru
+F15   | Napájení (Síť AC)                  | Chybějící fáze na vstupu AC      | Výpadek fáze napájecí sítě AC       | Zkontrolovat připojení fází sítě
+F16   | Měření proudu                      | Chyba vzorkování proudu IPM      | Závada obvodu měření proudu         | Zkontrolovat měřicí obvody IPM
+F17   | Teplotní senzor                    | Čidlo teploty modulu / chladiče  | Rozepnuté / vadné čidlo chladiče    | Zkontrolovat / vyměnit čidlo
+F20   | Výkonová elektronika               | Přehřátí výkonových spínačů IGBT | Teplota křemíku IGBT příliš vysoká  | Zkontrolovat chlazení a zátěž
+F21   | Proud kompresoru                   | Nadproud kompresoru              | Vstupní proud kompresoru moc vysoký | Zkontrolovat mechanickou zátěž komp.
+F22   | Celkový proud                      | Celkový nadproud na vstupu AC    | Celkový proud ze sítě příliš vysoký | Zkontrolovat elektrickou zátěž
+F23   | Paměť mikrokontroléru              | Chyba paměti EEPROM              | Selhání čtení/zápisu paměti MCU     | Zkontrolovat MCU / paměťový čip
+F24   | Zabezpečení firmwaru               | Porušení ochrany zápisu EEPROM   | Chyba ochrany paměti MCU            | Zkontrolovat integritu firmwaru
+F25   | Nízkonapěťová větev                | Nízké napětí na větvi 15V        | Větev V15V mimo rozsah 13,5V - 16,5V| Zkontrolovat pomocný 15V zdroj
+F26   | Výkonová elektronika               | Přehřátí výkonových spínačů IGBT | Nadměrná teplota snímače IGBT       | Zkontrolovat chlazení a zátěž
+
+
+================================================================================
+5.10 HARDWARE ŘÍDICÍ DESKY, TYPY SENZORŮ A ZAPOJENÍ SVOREK (PC8002 PCB)
+================================================================================
+Model hlavní řídicí desky : PC8002 (Sestava desek: 35005-310738 + 35005-310739)
+Mikrokontrolér            : Vyhrazená architektura DSP + MCU
+Odolnost proti rušení sb. : Odolnost proti skupinovým impulsům až do 4000 V
+Dosah přenosu sběrnice    : Až 100 - 200 m mezi venkovní PCB a nástěnným LCD ovladačem
+Regulace teploty          : Přesnost regulace přehřátí 0,1 °C
+
+Zapojení svorek a zatížitelnost:
+- Digitální výstupní relé (5A / 250VAC odporová zátěž):
+  * RO01 : Příkaz pro chod invertoru kompresoru (O01 / Reg 2019 Bit 0)
+  * RO02 : Primární oběhové čerpadlo vody (O02 / Reg 2019 Bit 1)
+  * RO03 : 4cestný reverzační ventil (O03 / Reg 2019 Bit 2)
+  * RO04 : Relé chodu motoru ventilátoru (O04 / Reg 2019 Bit 3)
+  * RO06 : Topný kabel vany kondenzátu (O06 / Reg 2019 Bit 5)
+  * RO07 : Topný kabel karteru kompresoru (O07 / Reg 2019 Bit 6)
+  * RO08 : Vstřikovací / sprejový ventil (O08 / Reg 2019 Bit 7)
+  * RO09 : Pomocný záložní elektrokotel / 3kW dohřev (O09 / Reg 2019 Bit 8)
+  * RO11 : Hlášení souhrnné poruchy / alarm (O11 / Reg 2019 Bit 10)
+  * RO12 : Cirkulační čerpadlo TUV (O12 / Reg 2019 Bit 11)
+  * RO13 : 3cestný přepínací ventil topení / TUV (O13 / Reg 2019 Bit 12)
+
+- Analogové vstupy a specifikace senzorů:
+  * T01 (Teplota vstupní vody)     : Svorka AI/DI 01 -> NTC 5kΩ @ 25°C (Reg 2045, měřítko 0.1 °C)
+  * T02 (Teplota výstupní vody)    : Svorka AI/DI 02 -> NTC 5kΩ @ 25°C (Reg 2046, měřítko 0.1 °C)
+  * T03 (Teplota výtlačných plynů) : Svorka AI/DI 03 -> NTC 50kΩ @ 25°C (Reg 2047, měřítko 0.1 °C)
+  * T04 (Teplota nádrže TUV / bojler): Svorka AI/DI 08 -> NTC 10kΩ @ 25°C (Reg 2048, měřítko 0.1 °C)
+  * T05 (Teplota nasávaných plynů) : Svorka AI/DI 05 -> NTC 5kΩ @ 25°C (Reg 2049, měřítko 0.1 °C)
+  * T06 (Teplota výparníku)        : Svorka AI/DI 06 -> NTC 5kΩ @ 25°C (Reg 2050, měřítko 0.1 °C)
+  * T07 (Venkovní teplota okolí)   : Svorka AI/DI 07 -> NTC 5kΩ @ 25°C (Reg 2051, měřítko 0.1 °C)
+  * T08 (Tlak sání)                : Svorka AI/DI 21 -> 5kΩ / poměrový 0-20 bar (Reg 2052, měřítko 0.1 bar)
+  * T09 (Tlak výtlaku)             : Svorka AI/DI 22 -> 5kΩ / poměrový 0-50 bar (Reg 2053, měřítko 0.1 bar)
+
+- Digitální vstupy (Beznapěťový kontakt):
+  * S01 (Spínač vysokého tlaku HP) : Svorka AI/DI 23 (Reg 2034 Bit 0)
+  * S02 (Spínač nízkého tlaku LP)  : Svorka AI/DI 24 (Reg 2034 Bit 1)
+  * S03 (Průtokový spínač vody)    : Svorka AI/DI 25 (Reg 2034 Bit 2)
+  * S04 (Nouzové/dálkové vypnutí)  : Svorka AI/DI 26 (Reg 2034 Bit 3)
+  * S05 (Přepínač režimu Topení/Chl: Svorka AI/DI 27 (Reg 2034 Bit 4)
+  * S07 (Ochrana přetížení el.dohř): Svorka AI/DI 29 (Reg 2034 Bit 6)
+
+- Krokový akční člen:
+  * EEV (Elektronický expanzní ventil): 5vodičový krokový motor, 0 až 500 kroků (O14 / Reg 2020)
+
+
+================================================================================
+6. STAVOVÝ AUTOMAT PRO EMULACI LCD OVLADAČE
+================================================================================
+
+--------------------------------------------------------------------------------
+6.1 Provozní stavy a přechody
+--------------------------------------------------------------------------------
++-----------------------------------------------------------------------------+
+| STAV 0: IDLE_LISTENING (Klidový poslech)                                    |
+| - Naslouchat na RS485 dotazům odpovídajícím [01, 03, 0B, B9, 00, 15, ...]   |
+| - Při přijetí:                                                              |
+|   1. Sestavit 42bajtovou odpověď s aktuálním časem RTC v offsetech 35-44.   |
+|   2. Pokud je ve frontě Flag 128 (0x8000):                                  |
+|        Nastavit offsety 23-24 (Reg 3011) = 0x8000 (bajt 23=128, bajt 24=0)  |
+|        Přechod -> STAV 1: AWAITING_SETTINGS_SYNC                            |
+|      Jinak pokud je ve frontě změna Bloku 1 (Reg 1001):                     |
+|        Nastavit offsety 23-24 (Reg 3011) = 0x0002                           |
+|        Přechod -> STAV 1: AWAITING_SETTINGS_SYNC                            |
+|      Jinak pokud je ve frontě změna Bloku 2 (Reg 1091):                     |
+|        Nastavit offsety 23-24 (Reg 3011) = 0x0004                           |
+|        Přechod -> STAV 1: AWAITING_SETTINGS_SYNC                            |
+|      Jinak pokud je ve frontě změna Bloku 3 (Reg 1181):                     |
+|        Nastavit offsety 23-24 (Reg 3011) = 0x0008                           |
+|        Přechod -> STAV 1: AWAITING_SETTINGS_SYNC                            |
+|      Jinak:                                                                 |
+|        Nastavit offsety 23-24 (Reg 3011) = 0x0000                           |
+|   3. Spočítat CRC-16 a odeslat odpověď.                                     |
++--------------------------------------+--------------------------------------+
+                                       |
+                   Odeslán příznak 0x8000 | 0x0002 / 0x0004 / 0x0008
+                                       v
++-----------------------------------------------------------------------------+
+| STAV 1: AWAITING_SETTINGS_SYNC (Čekání na synchronizaci nastavení)          |
+| - Pro příznak 0x8000: Master zapíše Blok 1 (1001), Blok 2 (1091) a Blok 3   |
+|   (1181) postupně přes FC 16. Uložit všechny registry do paměti toku.       |
+|   Po každém bloku vrátit potvrzovací ozvěnu FC 16.                          |
+| - Pro změnu jednoho bloku (Příznaky 2, 4, 8): Master čte přes FC 03 Read    |
+|   (LCD odešle 180 bajtů) NEBO Master zapisuje přes FC 16.                   |
+| - Přechod -> STAV 2: AWAITING_WRITE_ACK                                     |
++--------------------------------------+--------------------------------------+
+                                       |
+                   Všechny bloky přijaty
+                                       v
++-----------------------------------------------------------------------------+
+| STAV 2: AWAITING_WRITE_ACK (Čekání na potvrzení zápisu)                     |
+| - Master odešle FC 16 pro vymazání registru 3011:                           |
+|   [01, 16, 0B, C3, 00, 01, 02, 00, 00, 0D, A3]                             |
+| - Po přijetí:                                                               |
+|   1. Při dokončení synchronizace Flag 128: označit konfiguraci za           |
+|      INICIALIZOVANOU v paměti toku (lcd_config_initialized = true).         |
+|   2. Vyprázdnit lokální frontu čekajících změn (Reg 3011 -> 0x0000).        |
+|   3. Odeslat potvrzovací ozvěnu: [01, 16, 0B, C3, 00, 01, F3, D1].          |
+|   4. Přechod -> STAV 0: IDLE_LISTENING.                                     |
++-----------------------------------------------------------------------------+
+
+--------------------------------------------------------------------------------
+6.2 Automatická synchronizace při startu (Flag 128) a ochrana proti zápisu
+--------------------------------------------------------------------------------
+Aby se zabránilo přepsání nastavení tepelného čerpadla prázdnými nebo nulovými výchozími hodnotami:
+
+1. Automatické vyčtení při spuštění (Flag 128):
+   - Při startu Node-RED se do 0,5 s spustí automatický injektážní impulz.
+   - Zařadí do fronty Flag 128 (0x8000) a nastaví `lcd_config_initialized = false`.
+   - Při nejbližším dotazu odešle Flag 128 Masteru.
+   - Master přenese všech 270 skutečných parametrů do paměti Node-RED.
+   - Po přijetí závěrečného potvrzení se nastaví `lcd_config_initialized = true`.
+
+2. Ochrana proti neoprávněnému zápisu:
+   - Jakýkoliv pokus o změnu registrů (Příznaky 2, 4 nebo 8) je přísně BLOKOVÁN,
+     dokud není `lcd_config_initialized === true`.
+   - Zablokované požadavky zapíší varování do logu a vrátí chybový objekt:
+     `{ error: "CONFIGURATION_NOT_INITIALIZED", message: "..." }`.
+   - Po inicializaci slouží živé hodnoty vyčtené při Flag 128 jako základ,
+     přičemž se upravují pouze explicitně požadované registry.
+
+--------------------------------------------------------------------------------
+6.3 Koexistence na sběrnici a ochrana fyzického LCD (10sekundový watchdog)
+--------------------------------------------------------------------------------
+Pro zamezení elektrických kolizí transceiverů na sdílené lince RS-485 mezi
+fyzickým nástěnným LCD ovladačem (Slave 1) a emulátorem LCD v Node-RED:
+
+1. Problém elektrických kolizí na RS-485:
+   - Master periodicky každou ~1 sekundu dotazuje Slave 1 dotazem:
+     `[01, 03, 0B, B9, 00, 15]` (FC 03, Reg 3001, Počet 21).
+   - Pokud by fyzický LCD ovladač i emulátor v Node-RED zkusily odpovědět současně,
+     souběh obou budičů zkreslí napěťové úrovně na vodičích A/B, což způsobí
+     chyby rámce (framing errors) a neplatný kontrolní součet CRC.
+
+2. Dynamický mechanismus 10sekundového watchdogu:
+   Node-RED implementuje aktivní watchdog mezi uzlem "msg type 01,03,42 Display Reply"
+   (ID: `e5329555f3bee408`) a "LCD Emulator (Slave 1 Responder)" (ID: `b1569ee02102ae62`):
+
+   a. Detekce provozu z fyzického LCD:
+      - Uzel Display Reply sleduje všechny příchozí pakety ze sběrnice.
+      - Když z fyzického LCD dorazí odpověď začínající `[01, 03, 42]`:
+        * Okamžitě deaktivuje emulaci: `flow.set("lcd_emulator_enabled", false)`
+        * Uloží časové razítko: `flow.set("lcd_display_reply_last_seen", Date.now())`
+        * Aktualizuje vizuální stav uzlu: "Real LCD active (Emulation disabled)" (zelená tečka)
+        * Restartuje 10sekundový časovač ticha (`setTimeout`) v kontextové paměti.
+
+   b. Spuštění po 10 sekundách ticha (Automatické převzetí řízení):
+      - Pokud po dobu 10 sekund nedorazí žádný paket `[01, 03, 42]` (např. fyzický
+        displej byl odpojen, vypnut přídavným vypínačem nebo není přítomen):
+        * 10sekundový časovač vyprší.
+        * Povolí emulaci: `flow.set("lcd_emulator_enabled", true)`
+        * Aktualizuje vizuální stav uzlu: "No reply for 10s -> Emulation enabled" (žlutý kroužek)
+        * Emulátor LCD plynule převezme odpovídání na dotazy Masteru pro Slave 1.
+
+   c. Okamžité vypnutí při opětovném zapnutí fyzického panelu:
+      - Pokud je fyzický displej kdykoliv znovu připojen nebo zapnut vypínačem, hned
+        první přijatý paket `[01, 03, 42]` okamžitě deaktivuje emulaci:
+        `flow.set("lcd_emulator_enabled", false)`, čímž je zaručena nulová kolize na sběrnici.
+
+3. Dvoustupňová bezpečnostní pojistka v emulátoru (Uzel `b1569ee02102ae62`):
+   - Před každou odpovědí na dotaz Masteru zkontroluje emulátor uplynulý čas odmlky:
+     ```javascript
+     const timeSinceReply = Date.now() - (flow.get("lcd_display_reply_last_seen") || 0);
+     if (timeSinceReply < 10000) {
+         flow.set("lcd_emulator_enabled", false);
+         return null; // Ticho na sběrnici
+     }
+     ```
+   - Ochranná lhůta při startu: Při spuštění nebo nasazení toku je vynucena 10sekundová
+     ochranná lhůta ticha (`flow.set("lcd_display_reply_last_seen", Date.now())`),
+     aby Node-RED nejprve pasivně vyčkal, zda na sběrnici neodpovídá skutečný displej.
+   - Bezpečnost příkazů: Počáteční injektáž Flag 128 (0x8000) pouze připraví požadavek
+     do paměti, aniž by předčasně porušila 10sekundové vyhodnocení ticha.
+
+
+================================================================================
+7. PASIVNÍ ODPOSLECH A POZNÁMKY K INTEGRACI DO HOME ASSISTANT / MQTT
+================================================================================
+
+--------------------------------------------------------------------------------
+7.1 Pasivní odposlech a telemetrické veličiny (Vysílání část A a B)
+--------------------------------------------------------------------------------
+Pokud je vaším cílem monitorovat a grafovat provozní veličiny v Home Assistant:
+1. Pasivní odposlech je 100% elektricky bezpečný a vylučuje kolize s Masterem.
+2. Připojte vodiče A a B k galvanicky oddělenému USB-RS485 převodníku.
+3. Naslouchejte rámcům začínajícím:
+   `[00, 16, 07, 209]` -> `[0x00, 0x10, 0x07, 0xD1]` (Broadcast část A).
+4. Extrahujte registry pomocí offsetů definovaných v sekcích 5.1 a 5.2.
+5. Publikujte do Home Assistant přes MQTT Discovery:
+   - Senzory: Logická funkční taxonomie:
+     * Teploty vody: `[Temp] Water - Inlet`, `[Temp] Water - Outlet`, `[Temp] Water - Boiler`
+     * Teploty chladiva: `[Temp] Refrig - Suction`, `Discharge`, `Evaporator`, `Superheat Suction`, `Superheat Discharge`
+     * Teploty systému: `[Temp] System - Ambient`, `Inverter`, `Module Protection`
+     * Tlaky: `[Pressure] Refrig - Suction Pressure`, `Discharge Pressure`
+     * Elektrické parametry: `[Electrical] AC - Input Voltage`, `Input Current`, `DC - Bus Voltage`, `Comp - Compressor Current`
+     * Ventilátor: `[Fan] Motor - Speed`, `Speed Set`
+     * Expanzní ventil: `[EEV] Valve - Steps`
+     * Stav systému: `[System] Status - Freq Set`, `Freq Actual`, `Power ON/OFF`, `Status`
+   - Binární senzory a relé:
+     * Relé: `[Output] O01 Compressor` .. `[Output] O13 3-way Valve`
+     * Alarmy: `[Alarm] S01 High Pressure` .. `[Alarm] S07 Heater Overload`, `[Alarm] Detail - Code`
+   - Stavové téma MQTT: `nodered/heatpump/nodered_heatpump_001/state` (neperzistentní, perioda 10 s).
+
+--------------------------------------------------------------------------------
+7.2 Obousměrná integrace konfiguračních registrů přes Home Assistant MQTT
+--------------------------------------------------------------------------------
+Pro konfigurační registry (jako jsou cílové žádané teploty, limity a topné křivky)
+poskytuje Node-RED obousměrnou synchronizaci pomocí Home Assistant MQTT Discovery:
+
+1. Architektura zařízení a témat:
+   - Identifikátor zařízení: `nodered_heatpump_001` (Heat Pump)
+   - Téma stavu konfigurace: `nodered/heatpump/nodered_heatpump_001/config_state`
+     * Retained: TRUE (přetrvává i po restartu Home Assistant a Node-RED).
+     * Zpráva: JSON objekt se všemi známými konfiguračními klíči a ID registrů:
+       např. `{"boiler_target_temp": 50.0, "1191": 50.0}`
+   - Příkazové téma pro nastavení: `nodered/heatpump/nodered_heatpump_001/config/<reg>/set`
+     * Příchozí MQTT téma odebírané uzlem v Node-RED.
+     * Když uživatel změní parametr v HA, HA publikuje hodnotu (např. "52.0" nebo "ON").
+
+2. Taxonomie pojmenování, seskupení a Entity ID v Home Assistant:
+   Pro zajištění přehledného uspořádání a abecedního řazení na kartách Home Assistant:
+   - Karta Ovládání (Controls - 21 hlavních ovládacích prvků):
+     Čisté názvy bez závorek: `Power State`, `Operating Mode`, `Heating Setpoint`,
+     `Hot Water Setpoint`, `Cooling Setpoint`, `Timer 1 (ON) Enable`, `Fast Mute` atd.
+     Entity ID: `switch.hp_power_state`, `select.hp_operating_mode`, `number.hp_boiler_target_temp` atd.
+   - Karta Konfigurace (Configuration - 88 pokročilých registrů s `entityCategory: "config"`):
+     Standardizovaný formát: `"[Skupina] Podskupina - ID Název"`
+     Odpovídá záložkám na LCD ovladači:
+     * `[System]`  (Skupina H): např. `[System] General - H01 Auto Start`, `[System] Inverter - H06 Frequency Control P Value`
+     * `[Protect]` (Skupina A): např. `[Protect] Antifreeze - A01 Antifreeze Temp`, `[Protect] Limits - A04 Shutdown Ambient Temp`
+     * `[Fan]`     (Skupina F): např. `[Fan] Heating - F01 Max Speed in Heating`, `[Fan] Motor - F14 DC/EC Fan Rated Speed`
+     * `[Defrost]` (Skupina D): např. `[Defrost] Exit - D01 Exit Defrost Temp`, `[Defrost] Sliding - D05 Sliding High Point LP`
+     * `[EEV]`     (Skupina E): např. `[EEV] Mode - E01 Adjustment Mode`, `[EEV] Heat - E02 Superheat in Heating`
+     * `[Disinf]`  (Skupina G): např. `[Disinf] Target - G01 Disinfection Setpoint`, `[Disinf] Schedule - G04 Work Cycle`
+     * `[Pump]`    (Skupina P): např. `[Pump] Timing - P04 Pump Advanced Start Time`, `[Pump] Manual - P05 Pump Manual-control`
+     * `[Temp]`    (Skupina R): např. `[Temp] Diff - R04 Power-on Return Diff`, `[Temp] Curve - R17 Compensation-ON Low AT`
+     Entity ID (`object_id`): Generováno jako `hp_<slug>` (např. `number.hp_temp_curve_r17_compensation_on_low_at`).
+
+3. Příklad registrovaného parametru: Reg 1191 (Požadovaná teplota TUV):
+   - Registr: 1191 (Blok nastavení 3: 1181..1270).
+   - Měřítko: Násobek 10 (`500` = `50.0 °C`).
+   - Entita HA: `number.hp_hot_water_setpoint` (komponenta MQTT Number).
+   - Jednotka: `°C`, Třída zařízení: `temperature`, Ikona: `mdi:water-boiler`.
+   - Rozsah: Min 40.0 °C, Max 65.0 °C, Krok: 0.5 °C, Režim: `box`.
+   - Konfigurační téma Discovery: `homeassistant/number/nodered_heatpump_001_reg_1191_boiler_target_temp/config`
+
+4. Sekvence obousměrného zápisu:
+   a. Uživatel změní v HA teplotu na 52.0 °C.
+   b. HA publikuje "52.0" do `nodered/heatpump/nodered_heatpump_001/config/1191/set`.
+   c. Node-RED ověří `flow.get("lcd_config_initialized") === true` (bezpečnostní zámek Flag 128).
+   d. Node-RED převede číslo s plovoucí řádovou čárkou na celé číslo: `52.0 / 0.1 = 520`.
+   e. Node-RED aktualizuje `lcd_config_registers_block3[1191] = 520` a nastaví `lcd_event_flag = 8`.
+   f. Node-RED okamžitě odešle aktualizovaný perzistentní stav `52.0` do `config_state`.
+   g. Při nejbližším dotazu Masteru (do 1 s) Slave 1 odpoví s příznakem Flag 8.
+   h. Master vyčte Blok 3 (FC 03) nebo zapíše Blok 3 (FC 16), čímž synchronizuje novou žádanou hodnotu.
+
+5. Architektura v Node-RED:
+   Uzel "Create HA mqtt device" (`a671a68f7d9c1dfb`) dynamicky generuje veškeré zprávy
+   Discovery z polí `sensorMap` a `configRegisterList`, což zajišťuje automatickou synchronizaci entit.
+
+
+================================================================================
+8. PŘÍKLADY SUROVÝCH RÁMCŮ V HEX/DEC VČETNĚ OVĚŘENÍ CRC
+================================================================================
+
+Příklad 1: Dotaz Masteru na LCD displej (FC 03, Reg 3001, Počet 21)
+--------------------------------------------------------------------------------
+Dec : [1, 3, 11, 185, 0, 21, 87, 196]
+Hex : 01 03 0B B9 00 15 57 C4
+
+Příklad 2: Odpověď LCD s příznakem události 2 (Požadavek na synchronizaci Bloku 1)
+--------------------------------------------------------------------------------
+Dec : [1, 3, 42, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,2, 0,0,0,0,0,0,0,0,0,0,0, 26,0,9,0,30,0,14,0,32, CRC_L, CRC_H]
+Hex : 01 03 2A 00 00 ... 00 02 ...
+
+Příklad 3: Požadavek Masteru na čtení Bloku 1 (FC 03, Reg 1001, Počet 90)
+--------------------------------------------------------------------------------
+Dec : [1, 3, 3, 233, 0, 90, 20, 65]
+Hex : 01 03 03 E9 00 5A 14 41
+
+Příklad 4: Požadavek Masteru na zápis Bloku 1 (FC 16, Reg 1001, Počet 90, 180 bajtů)
+--------------------------------------------------------------------------------
+Dec : [1, 16, 3, 233, 0, 90, 180, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 3,233, 0,0, ...]
+Hex : 01 10 03 E9 00 5A B4 00 00 ... 03 E9 ...
+
+Příklad 5: Master nuluje/potvrzuje Registr 3011 (FC 16, Reg 3011, Počet 1, Hodnota 0x0000)
+--------------------------------------------------------------------------------
+Dec : [1, 16, 11, 195, 0, 1, 2, 0, 0, 13, 163]
+Hex : 01 10 0B C3 00 01 02 00 00 0D A3
+
+Příklad 6: Potvrzovací ozvěna z LCD (FC 16 Echo)
+--------------------------------------------------------------------------------
+Dec : [1, 16, 11, 195, 0, 1, 243, 209]
+Hex : 01 10 0B C3 00 01 F3 D1
+
+Příklad 7: Odpověď LCD s příznakem události 8 (Požadavek na synchronizaci Bloku 3)
+--------------------------------------------------------------------------------
+Dec : [1, 3, 42, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,8, 0,0,0,0,0,0,0,0,0,0,0, 26,0,9,0,30,0,14,0,32, 69, 233]
+Hex : 01 03 2A 00 00 ... 00 08 ...
+
+Příklad 8: Požadavek Masteru na čtení Bloku 3 (FC 03, Reg 1181, Počet 90)
+--------------------------------------------------------------------------------
+Dec : [1, 3, 4, 157, 0, 90, 85, 47]
+Hex : 01 03 04 9D 00 5A 55 2F
+
+Příklad 9: Odpověď LCD s daty Bloku 3 (180 bajtů)
+--------------------------------------------------------------------------------
+Dec : [1, 3, 180, 0,0, ..., 4,157, 1,244, 0,220, 0,200, ..., 125, 234]
+Hex : 01 03 B4 00 00 ... 04 9D ...
+
+Příklad 10: Úplný 9rámcový inicializační handshake systému (Flag 128 / 0x8000)
+--------------------------------------------------------------------------------
+Rámec 1 (15:31:15) LCD -> Master [FC 03 Odpověď na dotaz, Reg 3011 = 0x8000 (128)]:
+Dec: [1, 3, 42, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 128,0, 0,0,0,0,0,0,0,0,0,0,0, 26,0,10,0,2,0,15,0,38, 119, 201]
+Hex: 01 03 2A 00 00 ... 80 00 ... 00 1A 00 0A 00 02 00 0F 00 26 77 C9
+Poznámka: Offset 23-24 = 0x8000 (bajt 23 = 128). RTC = 2026-10-02 15:38.
+
+Rámec 2 (15:31:16) Master -> LCD [FC 16 Zápis Bloku 1: Reg 1001..1090, 180 bajtů]:
+Dec: [1, 16, 3, 233, 0, 90, 180, <180 datových bajtů>, 114, 101]
+Hex: 01 10 03 E9 00 5A B4 ... 72 65
+
+Rámec 3 (15:31:16) LCD -> Master [FC 16 Potvrzovací ozvěna Bloku 1]:
+Dec: [1, 16, 3, 233, 0, 90, 145, 130]
+Hex: 01 10 03 E9 00 5A 91 82
+
+Rámec 4 (15:31:16) Master -> LCD [FC 16 Zápis Bloku 2: Reg 1091..1180, 180 bajtů]:
+Dec: [1, 16, 4, 67, 0, 90, 180, <180 datových bajtů>, 243, 235]
+Hex: 01 10 04 43 00 5A B4 ... F3 EB
+
+Rámec 5 (15:31:16) LCD -> Master [FC 16 Potvrzovací ozvěna Bloku 2]:
+Dec: [1, 16, 4, 67, 0, 90, 176, 214]
+Hex: 01 10 04 43 00 5A B0 D6
+
+Rámec 6 (15:31:17) Master -> LCD [FC 16 Zápis Bloku 3: Reg 1181..1270, 180 bajtů]:
+Dec: [1, 16, 4, 157, 0, 90, 180, <180 datových bajtů>, 39, 255]
+Hex: 01 10 04 9D 00 5A B4 ... 27 FF
+
+Rámec 7 (15:31:17) LCD -> Master [FC 16 Potvrzovací ozvěna Bloku 3]:
+Dec: [1, 16, 4, 157, 0, 90, 208, 236]
+Hex: 01 10 04 9D 00 5A D0 EC
+
+Rámec 8 (15:31:17) Master -> LCD [FC 16 Vymazání Reg 3011 = 0x0000]:
+Dec: [1, 16, 11, 195, 0, 1, 2, 0, 0, 13, 163]
+Hex: 01 10 0B C3 00 01 02 00 00 0D A3
+
+Rámec 9 (15:31:17) LCD -> Master [FC 16 Potvrzovací ozvěna vymazání]:
+Dec: [1, 16, 11, 195, 0, 1, 243, 209]
+Hex: 01 10 0B C3 00 01 F3 D1
+
+
+================================================================================
+9. PRACOVNÍ POSTUP OBJEVOVÁNÍ PARAMETRŮ (DIFF-LOGGING V BĚŽNÉM PROVOZU)
+================================================================================
+Pro jednoznačnou identifikaci neznámých konfiguračních registrů je v Node-RED
+implementováno pasivní diff-logování:
+
+1. Příprava:
+   - Řídicí deska čerpadla i reálný LCD panel běžně komunikují po lince RS-485.
+   - Node-RED běží s aktivovaným 10sekundovým watchdogem:
+     * Dokud reálný LCD panel odpovídá pakety `[01, 03, 42]`, emulace zůstává
+       automaticky VYPNUTÁ, což zaručuje 100% pasivní odposlech bez jakéhokoliv
+       rizika kolize na sběrnici.
+     * Pokud je reálný LCD panel odpojen na >10 s, Node-RED plynule převezme emulaci.
+   - Uzel "Detect & Log Config Register Changes" naslouchá příchozím rámcům.
+
+2. Postup:
+   - Při prvním přijatém paketu pro každý blok se v paměti vytvoří výchozí snímek
+     (baseline snapshot) zaznamenávající všechny nenulové hodnoty.
+   - Přejděte k fyzickému nástěnnému LCD ovladači a změňte JEDINÝ parametr
+     (např. změňte cílovou teplotu TUV z 50 °C na 52 °C, nebo sklon topné křivky).
+   - Potvrďte a uložte nastavení na LCD ovladači.
+   - LCD ovladač odešle aktualizovaný 180bajtový blok dat Masteru.
+   - Diff logger porovná 90 registrů s předchozím uloženým snímkem.
+   - Do ladicího okna Node-RED i do souboru `/data/log/config_changes.txt` zapíše
+     okamžitý řádek s rozdílem hodnot:
+
+     Příklad výstupu:
+     2026-10-01 12:50:33 | [CONFIG CHANGED] Block 1 (Reg 1001-1090 / Flag 2) via FC 16 Write [1 change(s)]: Reg 1040: 50 -> 52 (Diff: +2 | Hex: 0x0032->0x0034)
+
+   - Odvozený závěr: Došlo ke změně Registru 1040 (+0,2 °C).
+     [Historická poznámka: V rané fázi testování se předpokládalo, že Registr 1040
+      je žádaná teplota TUV; porovnání s oficiálním manuálem jednoznačně prokázalo,
+      že Registr 1040 je Parametr A01 (Protimrazová teplota, 5.0 °C -> 5.2 °C),
+      zatímco žádaná teplota TUV sídlí v Registru 1191 (Parametr R01 v Bloku 3).]
+
+3. Údržba logovacího souboru:
+   - Cesta k souboru: `/data/log/config_changes.txt`
+   - Pomocí uzlu "delete" v Node-RED můžete logovací soubor kdykoli vymazat.
+   - Pomocí injektážního uzlu "Reset diff baseline snapshots" můžete znovu inicializovat
+     výchozí snímky parametrů.
+
+================================================================================
+KONEC SPECIFIKAČNÍHO SOUBORU
+================================================================================

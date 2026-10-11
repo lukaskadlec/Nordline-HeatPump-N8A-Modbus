@@ -1,3 +1,7 @@
+**Languages / Jazyky:** [English](README.md) | [Čeština](README.cz.md)
+
+---
+
 # Nordline Air-to-Water Heat Pump (N8A) - Modbus & Home Assistant Integration
 
 Bidirectional monitoring, telemetry, and full configuration control integration for the **Nordline N8A Air-to-Water Heat Pump** (equipped with the **PC8002 PCB Controller** and **Slave 1 LCD Wall Unit**).
@@ -206,6 +210,6 @@ Entities are structured so they sort logically on Home Assistant device cards:
 
 ## Reference Documentation
 
-- [`heatpump_configuration_registers.txt`](heatpump_configuration_registers.txt): Complete 270-register engineering map, parameter ranges, scalings, and manufacturer codes.
-- [`heatpump_rs485_protocol_spec.txt`](heatpump_rs485_protocol_spec.txt): In-depth Modbus protocol reverse-engineering specification, frame timings, and state machines.
+- [`heatpump_configuration_registers.txt`](heatpump_configuration_registers.txt) / [Česká verze (`heatpump_configuration_registers.cz.txt`)](heatpump_configuration_registers.cz.txt): Complete 270-register engineering map, parameter ranges, scalings, and manufacturer codes.
+- [`heatpump_rs485_protocol_spec.txt`](heatpump_rs485_protocol_spec.txt) / [Česká verze (`heatpump_rs485_protocol_spec.cz.txt`)](heatpump_rs485_protocol_spec.cz.txt): In-depth Modbus protocol reverse-engineering specification, frame timings, and state machines.
 - [`Nordline_N8A_Manual.pdf`](Nordline_N8A_Manual.pdf): Official manufacturer manual for PC8002 PCB controller and hardware wiring diagrams.

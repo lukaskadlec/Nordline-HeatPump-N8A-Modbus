@@ -1,0 +1,619 @@
+================================================================================
+TEPELNÉ ČERPADLO VZDUCH-VODA NORDLINE (N8A) - SPECIFIKACE KONFIGURAČNÍCH REGISTRŮ
+MAPOVÁNO Z OBRAZOVEK LCD OVLADAČE, PAKETŮ MODBUS RTU A OFICIÁLNÍHO MANUÁLU
+================================================================================
+Verze dokumentu   : 1.2.0
+Datum             : 2026-10-10
+Autor             : Tým analýzy telemetrie Modbus a synchronizace s manuálem
+Umístění souboru  : c:\Dev\Lukas\Nordline-HeatPump-N8A-Modbus\heatpump_configuration_registers.cz.txt
+Anglický originál : heatpump_configuration_registers.txt
+Referenční spec.  : heatpump_rs485_protocol_spec.cz.txt / heatpump_rs485_protocol_spec.txt
+Referenční manuál : Nordline_N8A_Manual.pdf (Řídicí deska PC8002 PCB / 35005-310738 + 35005-310739)
+Referenční snímky : display_screens/*.JPEG (31 fotografií obrazovek pořízených v sérii)
+Jazyk             : Čeština (překlad technické specifikace a tabulek)
+
+================================================================================
+1. ARCHITEKTURA A PŘEHLED SYNCHRONIZACE
+================================================================================
+Hlavní řídicí deska tepelného čerpadla (PC8002 PCB) synchronizuje konfigurační 
+nastavení s LCD ovladačem (Slave 1) pomocí 3 souvislých bloků dat po 90 registrech 
+(celkem 270 registrů, registry 1001 až 1270):
+
+- Blok 1: Registry 1001 až 1090 (0x03E9 - 0x0442) -> 90 registrů / 180 bajtů
+          Obsahuje: Nastavení systému (H), Bezpečnostní ochrany (A), Ventilátor (F)
+- Blok 2: Registry 1091 až 1180 (0x0443 - 0x049C) -> 90 registrů / 180 bajtů
+          Obsahuje: Odmrazování (D), Expanzní ventil EEV (E), Dezinfekce (G), Čerpadlo (P)
+- Blok 3: Registry 1181 až 1270 (0x049D - 0x04F6) -> 90 registrů / 180 bajtů
+          Obsahuje: Požadované teploty a ekvitermní křivky (R), Denní časovače
+
+Když se LCD ovladač zapne nebo vyvolá úplnou synchronizaci (Flag 128 / 0x8000 
+v registru 3011), řídicí deska (Master) odešle tři po sobě jdoucí Modbus FC 16 (0x10) 
+zápisové rámce následované zápisem 1 registru do Reg 3011 pro potvrzení a vynulování příznaku.
+
+Struktura Modbus paketu (FC 16):
+- Bajt 0    : Slave ID = 1
+- Bajt 1    : Kód funkce (Function Code) = 16 (0x10)
+- Bajty 2-3 : Počáteční registr (Big-Endian)
+- Bajty 4-5 : Počet registrů = 90 (0x005A)
+- Bajt 6    : Počet datových bajtů = 180 (0xB4)
+- Bajty 7.. : 180 bajtů užitečných dat (90 16bitových slov v Big-Endian formátu)
+- Poslední 2: Modbus CRC-16 (Low bajt, High bajt)
+
+Registry pro potvrzení počáteční adresy:
+- Reg 1010  : Hodnota 1001 (0x03E9) -> Počáteční adresa Bloku 1
+- Reg 1100  : Hodnota 1091 (0x0443) -> Počáteční adresa Bloku 2
+- Reg 1190  : Hodnota 1181 (0x049D) -> Počáteční adresa Bloku 3
+
+
+================================================================================
+2. PŘEHLED SKUPIN PARAMETRŮ A ÚROVNĚ PŘÍSTUPU (KÓD MANUÁLU 066 / KÓD 022)
+================================================================================
+Předpona skupiny | Popis kategorie                        | Záložka na displeji         | Úroveň přístupu (manuál)
+-----------------+----------------------------------------+-----------------------------+-------------------------
+H (H01..H13)     | Konfigurace systému                    | System                      | Výrobce / Servis (066)  
+A (A01..A06)     | Bezpečnostní a protimrazové ochrany    | Protect                     | Výrobce / Servis (066)  
+F (F01..F15)     | Řízení motoru ventilátoru a tichý režim| Fan                         | Výrobce / Uživatel      
+D (D01..D11)     | Parametry odmrazování                  | Defrost                     | Výrobce / Uživatel      
+E (E01..E20)     | Elektronický expanzní ventil (EEV)     | EEV                         | Výrobce / Uživatel      
+G (G01..G04)     | Vysokoteplotní dezinfekce (Legionella) | High Temp. Disinf.          | Výrobce / Servis (066)  
+P (P01..P05)     | Řízení oběhového čerpadla vody         | Pump                        | Výrobce / Uživatel      
+R (R01..R22)     | Požadované teploty a ekvitermní křivky | Temp                        | Výrobce / Uživatel      
+Timer (T01..T06) | Denní časovače Zapnutí / Vypnutí       | Timer                       | Uživatel                
+
+Hesla menu na LCD ovladači:
+- Kód "066" nebo "66" : Přístup k továrním / výrobním parametrům
+- Kód "022" nebo "22" : Uživatelský přístup / kontrola stavu vstupů a výstupů (I/O)
+
+
+--------------------------------------------------------------------------------
+2.1 TAXONOMIE POJMENOVÁNÍ A ŘAZENÍ PRO HOME ASSISTANT MQTT DISCOVERY
+--------------------------------------------------------------------------------
+Pro zajištění přehledného logického seskupení a abecedního řazení na kartách 
+v Home Assistant dodržuje všech 109 konfiguračních registrů a 42 senzorů 
+stavu a telemetrie strukturovanou taxonomii:
+
+1. Primární ovládací prvky (21 entit na kartě "Controls" v HA):
+   Čisté názvy bez hranatých závorek pro přímé a pohodlné ovládání:
+   - Power State (switch.hp_power_state)
+   - Operating Mode (select.hp_operating_mode)
+   - Heating Setpoint (number.hp_heating_setpoint)
+   - Hot Water Setpoint (number.hp_hot_water_setpoint)
+   - Cooling Setpoint (number.hp_cooling_setpoint)
+   - Timer 1 (ON) Enable / Hour / Minute (switch.hp_timer_1_on_enable, atd.)
+   - Timer 2 (OFF) Enable / Hour / Minute (switch.hp_timer_2_off_enable, atd.)
+   - Fast Mute (switch.hp_fast_mute)
+   - Mute Timer Enable / Start / End (switch.hp_mute_timer_enable, atd.)
+   - Electric Heater (switch.hp_electric_heater)
+   - Pump Running Mode / Interval / Duration (select.hp_pump_running_mode, atd.)
+
+2. Pokročilá konfigurace (88 registrů na kartě "Configuration" v HA):
+   Formát: "[Skupina] Podskupina - ID Název"
+   - [System]  : General, Network, Unit, Valve, Inverter, Model
+   - [Protect] : Antifreeze, Limits, Valve
+   - [Fan]     : Heating, Cooling, Manual, Mute, Motor
+   - [Defrost] : Exit, Cycle, Sliding, Heater, Comp
+   - [EEV]     : Mode, Heat, Initial, Defrost, Cool, Timing, PID, Manual
+   - [Disinf]  : Target, Schedule
+   - [Pump]    : Timing, Manual
+   - [Temp]    : Diff, Limit, Heater, Curve
+   Identifikátory entit (object_id): hp_<slug> (např. number.hp_temp_curve_r17_compensation_on_low_at)
+
+3. Stavové a telemetrické senzory (42 entit na kartách "Sensors" a "Diagnostic" v HA):
+   Formát: "[Skupina] Podskupina - Název / ID"
+   - [Temp]       : Water (Inlet, Outlet, Boiler), Refrig (Suction, Discharge, Evaporator, Superheat), System (Ambient, Inverter, Module Protection)
+   - [Pressure]   : Refrig (Suction Pressure, Discharge Pressure)
+   - [Electrical] : AC (Voltage, Current), DC (Bus Voltage), Comp (Compressor Current)
+   - [Fan]        : Motor (Speed, Speed Set)
+   - [EEV]        : Valve (Steps)
+   - [System]     : Status (Freq Set, Freq Actual, Power ON/OFF, Status)
+   - [Output]     : Digitální relé O01 .. O13
+   - [Alarm]      : Diagnostické a bezpečnostní spínače S01 .. S07, Detail (Kód)
+
+
+================================================================================
+3. PODROBNÁ SPECIFIKACE REGISTRŮ
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1 BLOK 1: REGISTRY 1001 - 1090 (SYSTÉM, OCHRANA, VENTILÁTOR)
+--------------------------------------------------------------------------------
+Reg        | ID  | Název parametru                  | Surová | Dec/Hex | Měřítko | Zobrazená hodnota | Rozsah v manuálu & Výchozí           | Datový typ / Možnosti                                        
+-----------+-----+----------------------------------+--------+---------+---------+-------------------+--------------------------------------+--------------------------------------------------------------
+1001       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1002       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1003       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1004       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1005       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1006       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1007       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1008       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1009       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1010       | -   | Potvrzení adresy Bloku 1         | 1001   | 0x03E9  | 1       | 1001              | 1001                                 | uint16 (Konstanta)                                           
+1011       | -   | Stav napájení systému (ON/OFF)   | 0      | 0x0000  | 1       | Vypnuto (Off)     | 0 .. 1                               | enum: 0=Off, 1=On                                            
+1012       | -   | Provozní režim                   | 0      | 0x0000  | 1       | TUV (Hot Water)   | 0 .. 4                               | enum: 0=TUV, 1=Topení, 2=Chlazení, 3=TUV+Top, 4=TUV+Chl      
+1013       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1014       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1015       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1016       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1017       | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16                                                       
+1018       | H01 | Autostart (Paměť výpadku proudu) | 1      | 0x0001  | 1       | Ano (Yes)         | 0 .. 1 (Výchozí: 1 / Ano)            | enum: 0=Ne (Po výpadku vypnuto), 1=Ano (Pamatovat stav)      
+1019       | H02 | Jednotka Master/Slave            | 0      | 0x0000  | 1       | Master            | 0 .. 1 (Výchozí: 0 / Master)         | enum: 0=Master, 1=Slave                                      
+1020       | H03 | Jednotka teploty                 | 0      | 0x0000  | 1       | °C                | 0 .. 1 (Výchozí: 0 / °C)             | enum: 0=°C, 1=°F                                             
+1021       | H04 | Polarita 4cestného ventilu       | 0      | 0x0000  | 1       | Sepnut při topení | 0 .. 1 (Výchozí: 0 / On-heating)     | enum: 0=Sepnut při topení, 1=Rozepnut při topení             
+1022       | H05 | Polarita 3cestného ventilu       | 1      | 0x0001  | 1       | Rozepnut při TUV  | 0 .. 1 (Výchozí: 0 / On-heat water)  | enum: 0=Sepnut při TUV, 1=Rozepnut při TUV                   
+1023       | H06 | Řízení frekvence - hodnota P     | 5      | 0x0005  | 1       | 5                 | 1 .. 100 (Výchozí: 5)                | uint16 (PID P)                                               
+1024       | H07 | Řízení frekvence - hodnota I     | 1      | 0x0001  | 1       | 1                 | 1 .. 100 (Výchozí: 1)                | uint16 (PID I)                                               
+1025       | H08 | Řízení frekvence - hodnota D     | 5      | 0x0005  | 1       | 5                 | 0 .. 100 (Výchozí: 5)                | uint16 (PID D)                                               
+1026       | H09 | Minimální frekvence kompresoru   | 30     | 0x001E  | 1       | 30 Hz             | 20 .. 60 Hz (Výchozí: 30)            | uint16 (Hz)                                                  
+1027       | H10 | Maximální frekvence kompresoru   | 80     | 0x0050  | 1       | 80 Hz             | 30 .. 120 Hz (Výchozí: 90)           | uint16 (Hz)                                                  
+1028       | H11 | Volba modelu                     | 17     | 0x0011  | 1       | 17                | 0 .. 50 (Výchozí: 17)                | uint16 (ID modelu PC8002)                                    
+1029       | H12 | Ruční frekvence pohonu           | 0      | 0x0000  | 1       | 0 Hz              | 0 .. 90 Hz (Výchozí: 0)              | uint16 (Hz, 0=Auto)                                          
+1030       | H13 | Povolení funkce PFC              | 1      | 0x0001  | 1       | Ano               | 0 .. 1 (Výchozí: 1 / Ano)            | enum: 0=Ne, 1=Ano                                            
+1031       | H14 | Přídavný elektrický dohřev       | 0      | 0x0000  | 1       | Vypnuto           | 0 .. 1 (Výchozí: 0 / Vypnuto)        | enum: 0=Vypnuto, 1=Zapnuto (Parametr menu)                   
+1032       | H15 | Adresa jednotky (Modbus Slave ID)| 1      | 0x0001  | 1       | 1                 | 1 .. 247 (Výchozí: 1)                | uint16 (Adresa Modbus)                                       
+1033..1039 | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16 (Reg 1033 až 1039)                                    
+1040       | A01 | Protimrazová teplota             | 50     | 0x0032  | 0.1     | 5.0 °C            | -10 .. 10 °C (Výchozí: 5.0)          | int16 (/10 °C)                                               
+1041       | A02 | Protimrazový nízký tlak          | 20     | 0x0014  | 0.1     | 2.0 bar           | 0 .. 10 bar (Výchozí: 2.0)           | int16 (/10 bar)                                              
+1042       | A03 | Protimrazový rozdíl teplot       | 20     | 0x0014  | 0.1     | 2.0 °C            | 0 .. 10 °C (Výchozí: 2.0)            | int16 (/10 °C)                                               
+1043       | A04 | Venkovní teplota odstavení       | -200   | 0xFF38  | 0.1     | -20.0 °C          | -30 .. 10 °C (Výchozí: -20.0)        | int16 signed (/10 °C)                                        
+1044       | A05 | Bezpečná teplota výtlaku         | 1100   | 0x044C  | 0.1     | 110.0 °C          | 80 .. 130 °C (Výchozí: 110.0)        | int16 (/10 °C)                                               
+1045       | A06 | Teplota otevření vstřik. ventilu | 350    | 0x015E  | 0.1     | 35.0 °C           | 10 .. 50 °C (Výchozí: 35.0)          | int16 (/10 °C)                                               
+1046..1058 | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16 (Reg 1046 až 1058)                                    
+1059       | F01 | Max. otáčky při topení           | 800    | 0x0320  | 1       | 800 rpm           | 0 .. 2000 rpm (Výchozí: 1050)        | uint16 (ot./min)                                             
+1060       | F02 | Min. otáčky při topení           | 300    | 0x012C  | 1       | 300 rpm           | 0 .. 2000 rpm (Výchozí: 300)         | uint16 (ot./min)                                             
+1061       | F03 | Nízký tlak sání pro topení       | 30     | 0x001E  | 0.1     | 3.0 bar           | 0 .. 20 bar (Výchozí: 3.0)           | int16 (/10 bar)                                              
+1062       | F04 | Vysoký tlak sání pro topení      | 110    | 0x006E  | 0.1     | 11.0 bar          | 0 .. 20 bar (Výchozí: 11.0)          | int16 (/10 bar)                                              
+1063       | F05 | Max. otáčky při chlazení         | 550    | 0x0226  | 1       | 550 rpm           | 0 .. 2000 rpm (Výchozí: 1050)        | uint16 (ot./min)                                             
+1064       | F06 | Min. otáčky při chlazení         | 300    | 0x012C  | 1       | 300 rpm           | 0 .. 2000 rpm (Výchozí: 300)         | uint16 (ot./min)                                             
+1065       | F07 | Vysoký tlak výtlaku pro chlazení | 280    | 0x0118  | 0.1     | 28.0 bar          | 0 .. 50 bar (Výchozí: 33.0)          | int16 (/10 bar)                                              
+1066       | F08 | Nízký tlak výtlaku pro chlazení  | 200    | 0x00C8  | 0.1     | 20.0 bar          | 0 .. 50 bar (Výchozí: 15.0)          | int16 (/10 bar)                                              
+1067       | F09 | Ruční otáčky ventilátoru         | 0      | 0x0000  | 1       | 0 rpm             | 0 .. 2000 rpm (Výchozí: 0)           | uint16 (ot./min, 0=Auto)                                     
+1068       | F10 | Časovač tichého režimu           | 0      | 0x0000  | 1       | Ne (Off)          | 0 .. 1 (Výchozí: 0 / Ne)             | enum: 0=Ne, 1=Ano                                            
+1069       | F11 | Začátek tichého režimu (Hodina)  | 22     | 0x0016  | 1       | 22 h              | 0 .. 23 h (Výchozí: 0)               | uint16 (Hodina 0-23)                                         
+1070       | F12 | Konec tichého režimu (Hodina)    | 1      | 0x0001  | 1       | 1 h               | 0 .. 23 h (Výchozí: 0)               | uint16 (Hodina 0-23)                                         
+1071       | F13 | Otáčky ventilátoru v tichém rež. | 450    | 0x01C2  | 1       | 450 rpm           | 300 .. 1300 rpm (Výchozí: 600)       | uint16 (ot./min)                                             
+1072       | F14 | Jmenovité otáčky DC/EC ventilát. | 600    | 0x0258  | 1       | 600 rpm           | 0 .. 1300 rpm (Výchozí: 600)         | uint16 (ot./min)                                             
+1073       | F15 | Typ motoru ventilátoru           | 1      | 0x0001  | 1       | 1                 | 0 .. 2 (Výchozí: 1 / DC)             | enum: 0=AC, 1=DC, 2=2xDC                                     
+1074       | -   | Rychlý tichý režim (Fast Mute)   | 0      | 0x0000  | 1       | Vypnuto           | 0 .. 1 (Aktivní 8 hodin)             | enum: 0=Vypnuto, 1=Zapnuto                                   
+1075..1090 | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16 (Reg 1075 až 1090)                                    
+
+
+--------------------------------------------------------------------------------
+3.2 BLOK 2: REGISTRY 1091 - 1180 (ODMRAZOVÁNÍ, EEV, DEZINFEKCE, ČERPADLO)
+--------------------------------------------------------------------------------
+Reg        | ID  | Název parametru              | Surová | Dec/Hex | Měřítko | Zobrazená hodnota | Rozsah v manuálu & Výchozí    | Datový typ / Možnosti                    
+-----------+-----+------------------------------+--------+---------+---------+-------------------+-------------------------------+------------------------------------------
+1091..1099 | -   | Rezervováno                  | 0      | 0x0000  | 1       | 0                 | -                             | uint16 (Reg 1091 až 1099)                
+1100       | -   | Potvrzení adresy Bloku 2     | 1091   | 0x0443  | 1       | 1091              | 1091                          | uint16 (Konstanta)                       
+1101       | D01 | Teplota ukončení odmrazování | 150    | 0x0096  | 0.1     | 15.0 °C           | 1 .. 40 °C (Výchozí: 13.0)    | int16 (/10 °C)                           
+1102       | D02 | Tlak ukončení odmrazování    | 250    | 0x00FA  | 0.1     | 25.0 bar          | 1 .. 25 bar (Výchozí: 25.0)   | int16 (/10 bar, 25 bar = 41 °C)          
+1103       | D03 | Cyklus odmrazování           | 30     | 0x001E  | 1       | 30 min            | 1 .. 90 min (Výchozí: 45)     | uint16 (Minuty)                          
+1104       | D04 | Max. doba odmrazování        | 10     | 0x000A  | 1       | 10 min            | 1 .. 20 min (Výchozí: 8)      | uint16 (Minuty)                          
+1105       | D05 | Klouzavý horní bod LP tlaku  | 59     | 0x003B  | 0.1     | 5.9 bar           | 1 .. 20 bar (Výchozí: 5.3)    | int16 (/10 bar, 5.3 bar = -12 °C)        
+1106       | D06 | Klouzavý dolní bod LP tlaku  | 28     | 0x001C  | 0.1     | 2.8 bar           | 1 .. 20 bar (Výchozí: 2.8)    | int16 (/10 bar, 2.8 bar = -28 °C)        
+1107       | D07 | Klouzavý horní bod venk. tepl| 40     | 0x0028  | 0.1     | 4.0 °C            | -10 .. 10 °C (Výchozí: 2.0)   | int16 (/10 °C)                           
+1108       | D08 | Klouzavý dolní bod venk. tepl| -150   | 0xFF6A  | 0.1     | -15.0 °C          | -30 .. 10 °C (Výchozí: -15.0) | int16 signed (/10 °C)                    
+1109       | D09 | Klouzavé odmrazování         | 1      | 0x0001  | 1       | Ano               | 0 .. 1 (Výchozí: 1 / Ano)     | enum: 0=Ne, 1=Ano                        
+1110       | D10 | Elektrický dohřev při odmraz.| 0      | 0x0000  | 1       | Ne                | 0 .. 1 (Výchozí: 0 / Ne)      | enum: 0=Ne (Zachovat stav), 1=Ano (Vynutit)
+1111       | D11 | Frekvence při odmrazování    | 70     | 0x0046  | 1       | 70 Hz             | 0 .. 90 Hz (Výchozí: 70)      | uint16 (Hz)                              
+1112..1126 | -   | Rezervováno                  | 0      | 0x0000  | 1       | 0                 | -                             | uint16 (Reg 1112 až 1126)                
+1127       | E01 | Režim nastavení ventilu EEV  | 1      | 0x0001  | 1       | Auto              | 0 .. 1 (Výchozí: 1 / Auto)    | enum: 0=Ručně, 1=Auto                    
+1128       | E02 | Přehřátí při topení          | 40     | 0x0028  | 0.1     | 4.0 °C            | -10 .. 10 °C (Výchozí: 5.0)   | int16 (/10 °C)                           
+1129       | E03 | Kompenzace přehřátí 1 topení | 5      | 0x0005  | 0.1     | 0.5 °C            | -10 .. 10 °C (Výchozí: 1.0)   | int16 (/10 °C)                           
+1130       | E04 | Kompenzace přehřátí 2 topení | 5      | 0x0005  | 0.1     | 0.5 °C            | -10 .. 10 °C (Výchozí: 0.5)   | int16 (/10 °C)                           
+1131       | E05 | Počáteční kroky při topení   | 350    | 0x015E  | 1       | 350 N             | 0 .. 480 N (Výchozí: 350)     | uint16 (Kroky, +50 pokud AT < 0 °C)      
+1132       | E06 | Počáteční kroky kompenzace 1 | 0      | 0x0000  | 1       | 0 N               | 0 .. 200 N (Výchozí: 0)       | uint16 (Kroky)                           
+1133       | E07 | Počáteční kroky kompenzace 2 | 0      | 0x0000  | 1       | 0 N               | 0 .. 200 N (Výchozí: 0)       | uint16 (Kroky)                           
+1134       | E08 | Počáteční kroky kompenzace 3 | 0      | 0x0000  | 1       | 0 N               | 0 .. 200 N (Výchozí: 0)       | uint16 (Kroky)                           
+1135       | E09 | Minimální počáteční kroky    | 100    | 0x0064  | 1       | 100 N             | 0 .. 200 N (Výchozí: 100)     | uint16 (Kroky)                           
+1136       | E10 | Kroky při odmrazování        | 480    | 0x01E0  | 1       | 480 N             | 0 .. 480 N (Výchozí: 480)     | uint16 (Kroky)                           
+1137       | E11 | Přehřátí při chlazení        | 40     | 0x0028  | 0.1     | 4.0 °C            | -10 .. 10 °C (Výchozí: 6.0)   | int16 (/10 °C)                           
+1138       | E12 | Počáteční kroky při chlazení | 480    | 0x01E0  | 1       | 480 N             | 0 .. 480 N (Výchozí: 350)     | uint16 (Kroky)                           
+1139       | E13 | Doba asistence otevření výtl.| 60     | 0x003C  | 1       | 60 min            | 0 .. 100 min (Výchozí: 60)    | uint16 (Minuty)                          
+1140       | E14 | Doba otevření přehřátí sání  | 24     | 0x0018  | 1       | 24 min            | 0 .. 100 min (Výchozí: 24)    | uint16 (Minuty)                          
+1141       | E15 | Regulační hodnota P          | 5      | 0x0005  | 1       | 5                 | 0 .. 100 (Výchozí: 5)         | uint16 (P)                               
+1142       | E16 | Regulační hodnota I          | 3      | 0x0003  | 1       | 3                 | 0 .. 100 (Výchozí: 32)        | uint16 (I)                               
+1143       | E17 | Regulační hodnota D          | 0      | 0x0000  | 1       | 0                 | 0 .. 100 (Výchozí: 0)         | uint16 (D)                               
+1144       | E18 | Ruční nastavení kroků        | 0      | 0x0000  | 1       | 0 N               | 0 .. 550 N (Výchozí: 0)       | uint16 (Kroky)                           
+1145       | E19 | Kompenzace přehřátí 1 (Chl.) | 20     | 0x0014  | 0.1     | 2.0 °C            | -10 .. 10 °C (Výchozí: 2.0)   | int16 (/10 °C)                           
+1146       | E20 | Kompenzace přehřátí 2 (Chl.) | 40     | 0x0028  | 0.1     | 4.0 °C            | -10 .. 10 °C (Výchozí: 4.0)   | int16 (/10 °C)                           
+1147..1159 | -   | Rezervováno                  | 0      | 0x0000  | 1       | 0                 | -                             | uint16 (Reg 1147 až 1159)                
+1160       | G01 | Požadovaná teplota dezinfekce| 650    | 0x028A  | 0.1     | 65.0 °C           | 60 .. 70 °C (Výchozí: 70.0)   | int16 (/10 °C)                           
+1161       | G02 | Doba trvání dezinfekce       | 5      | 0x0005  | 1       | 5 min             | 0 .. 60 min (Výchozí: 0)      | uint16 (Minuty, 0=Vypnuto)               
+1162       | G03 | Čas spuštění dezinfekce      | 1      | 0x0001  | 1       | 1 h               | 0 .. 23 h (Výchozí: 0)        | uint16 (Hodina 0-23)                     
+1163       | G04 | Pracovní cyklus (Perioda)    | 30     | 0x001E  | 1       | 30 dní            | 1 .. 30 dní (Výchozí: 7)      | uint16 (Dny)                             
+1164..1166 | -   | Rezervováno                  | 0      | 0x0000  | 1       | 0                 | -                             | uint16 (Reg 1164 až 1166)                
+1167       | P01 | Režim běhu čerpadla          | 1      | 0x0001  | 1       | Special           | 0 .. 2 (Výchozí: 1 / Special) | enum: 0=Běžný, 1=Speciální, 2=Interval   
+1168       | P02 | Interval běhu čerpadla       | 30     | 0x001E  | 1       | 30 min            | 0 .. 120 min (Výchozí: 30)    | uint16 (Minuty)                          
+1169       | P03 | Doba chodu čerpadla v interv.| 3      | 0x0003  | 1       | 3 min             | 0 .. 30 min (Výchozí: 3)      | uint16 (Minuty)                          
+1170       | P04 | Předstih spuštění čerpadla   | 3      | 0x0003  | 1       | 3 min             | 0 .. 30 min (Výchozí: 1)      | uint16 (Minuty před kompresorem)         
+1171       | P05 | Ruční ovládání čerpadla      | 0      | 0x0000  | 1       | Ne                | 0 .. 1 (Výchozí: 0 / Ne)      | enum: 0=Ne, 1=Ano                        
+1172..1180 | -   | Rezervováno                  | 0      | 0x0000  | 1       | 0                 | -                             | uint16 (Reg 1172 až 1180)                
+
+
+--------------------------------------------------------------------------------
+3.3 BLOK 3: REGISTRY 1181 - 1270 (POŽADOVANÉ TEPLOTY, EKVITERM, ČASOVAČE)
+--------------------------------------------------------------------------------
+Reg        | ID  | Název parametru                  | Surová | Dec/Hex | Měřítko | Zobrazená hodnota | Rozsah v manuálu & Výchozí         | Datový typ / Možnosti                        
+-----------+-----+----------------------------------+--------+---------+---------+-------------------+------------------------------------+--------------------------------------------
+1181..1189 | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                  | uint16 (Reg 1181 až 1189)                  
+1190       | -   | Potvrzení adresy Bloku 3         | 1181   | 0x049D  | 1       | 1181              | 1181                               | uint16 (Konstanta)                          
+1191       | R01 | Požadovaná teplota TUV           | 505    | 0x01F9  | 0.1     | 50.5 °C           | R06 .. R07 (Výchozí: 55.0)         | int16 (/10 °C, Krok: 0.5 °C)               
+1192       | R02 | Požadovaná teplota topení        | 220    | 0x00DC  | 0.1     | 22.0 °C           | R08 .. R09 (Výchozí: 40.0)         | int16 (/10 °C, Krok: 0.5 °C)               
+1193       | R03 | Požadovaná teplota chlazení      | 200    | 0x00C8  | 0.1     | 20.0 °C           | R10 .. R11 (Výchozí: 12.0)         | int16 (/10 °C, Krok: 0.5 °C)               
+1194       | R04 | Diference návratu po spuštění    | 30     | 0x001E  | 0.1     | 3.0 °C            | 0 .. 10 °C (Výchozí: 2/5)          | int16 (/10 °C, Hystereze)                  
+1195       | R05 | Teplotní diference pohotovosti   | 30     | 0x001E  | 0.1     | 3.0 °C            | 0 .. 10 °C (Výchozí: 2/5)          | int16 (/10 °C, Hystereze)                  
+1196       | R06 | Min. požadovaná teplota TUV      | 400    | 0x0190  | 0.1     | 40.0 °C           | 0 .. R07 (Výchozí: 40.0)           | int16 (/10 °C)                             
+1197       | R07 | Max. požadovaná teplota TUV      | 650    | 0x028A  | 0.1     | 65.0 °C           | R06 .. 65 °C (Výchozí: 65.0)       | int16 (/10 °C)                             
+1198       | R08 | Min. požadovaná teplota topení   | 200    | 0x00C8  | 0.1     | 20.0 °C           | 20 .. 30 °C (Výchozí: 30.0)        | int16 (/10 °C)                             
+1199       | R09 | Max. požadovaná teplota topení   | 500    | 0x01F4  | 0.1     | 50.0 °C           | 30 .. 60 °C (Výchozí: 50.0)        | int16 (/10 °C)                             
+1200       | R10 | Min. požadovaná teplota chlazení | 120    | 0x0078  | 0.1     | 12.0 °C           | 8 .. 20 °C (Výchozí: 12.0)         | int16 (/10 °C)                             
+1201       | R11 | Max. požadovaná teplota chlazení | 200    | 0x00C8  | 0.1     | 20.0 °C           | 20 .. 30 °C (Výchozí: 20.0)        | int16 (/10 °C)                             
+1202       | R12 | Režim elektrického dohřevu       | 0      | 0x0000  | 1       | Nepoužito         | 0 .. 2 (Výchozí: 0 / Nepoužito)    | enum: 0=Nepoužito, 1=Topení, 2=Nádrž TUV   
+1203       | R13 | Diference spuštění el. dohřevu   | 50     | 0x0032  | 0.1     | 5.0 °C            | 0 .. 10 °C (Výchozí: 5.0)          | int16 (/10 °C)                             
+1204       | R14 | Venkovní teplota spuštění el.doh.| 20     | 0x0014  | 0.1     | 2.0 °C            | -10 .. 30 °C (Výchozí: 5.0)        | int16 (/10 °C)                             
+1205       | R15 | Zpoždění elektrického dohřevu    | 45     | 0x002D  | 1       | 45 min            | 0 .. 60 min (Výchozí: 30)          | uint16 (Minuty)                            
+1206       | R16 | Okamžité spuštění el. dohřevu AT | -50    | 0xFFCE  | 0.1     | -5.0 °C           | -30 .. 20 °C (Výchozí: 2.0)        | int16 signed (/10 °C)                      
+1207       | R17 | Kompenzace-ZAP při nízké tepl. AT| 0      | 0x0000  | 0.1     | 0.0 °C            | R18 .. 0 °C (Výchozí: -30.0)       | int16 (/10 °C)                             
+1208       | R18 | Kompenzace-VYP při nízké tepl. AT| -150   | 0xFF6A  | 0.1     | -15.0 °C          | -30 .. R17 (Výchozí: -30.0)        | int16 signed (/10 °C)                      
+1209       | R19 | Max. cílová teplota při nízké AT | 450    | 0x01C2  | 0.1     | 45.0 °C           | 20 .. 60 °C (Výchozí: 45.0)        | int16 (/10 °C)                             
+1210       | R20 | Kompenzace-ZAP při vysoké tepl AT| 550    | 0x0226  | 0.1     | 55.0 °C           | 10 .. R21 (Výchozí: 55.0)          | int16 (/10 °C)                             
+1211       | R21 | Kompenzace-VYP při vysoké tepl AT| 550    | 0x0226  | 0.1     | 55.0 °C           | R20 .. 60 °C (Výchozí: 55.0)       | int16 (/10 °C)                             
+1212       | R22 | Max. cílová teplota při vysoké AT| 450    | 0x01C2  | 0.1     | 45.0 °C           | 20 .. 60 °C (Výchozí: 45.0)        | int16 (/10 °C)                             
+1213..1254 | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                  | uint16 (Reg 1213 až 1254)                  
+1255       | T01 | Povolení časovače 1 (ZAP)        | 1      | 0x0001  | 1       | Zapnuto (Aktivní) | 0 .. 1 (Výchozí: 0 / Vypnuto)      | enum: 0=Vypnuto, 1=Zapnuto                 
+1256       | T02 | Časovač 1 (ZAP) - Hodina         | 16     | 0x0010  | 1       | 16                | 0 .. 23 h (Výchozí: 0)             | uint16 (Hodina 0-23)                       
+1257       | T03 | Povolení časovače 2 (VYP)        | 1      | 0x0001  | 1       | Vypnuto (Aktivní) | 0 .. 1 (Výchozí: 0 / Vypnuto)      | enum: 0=Vypnuto, 1=Zapnuto                 
+1258       | T04 | Časovač 2 (VYP) - Hodina         | 20     | 0x0014  | 1       | 20                | 0 .. 23 h (Výchozí: 0)             | uint16 (Hodina 0-23)                       
+1259       | T05 | Časovač 1 (ZAP) - Minuta         | 0      | 0x0000  | 1       | 0                 | 0 .. 59 min (Výchozí: 0)           | uint16 (Minuta 0-59)                       
+1260       | T06 | Časovač 2 (VYP) - Minuta         | 0      | 0x0000  | 1       | 0                 | 0 .. 59 min (Výchozí: 0)           | uint16 (Minuta 0-59)                       
+1261       | -   | Minuta začátku tichého režimu    | 0      | 0x0000  | 1       | 0 min             | 0 .. 59 min (Výchozí: 0)           | uint16 (Minuta 0-59)                       
+1262       | -   | Minuta konce tichého režimu      | 0      | 0x0000  | 1       | 0 min             | 0 .. 59 min (Výchozí: 0)           | uint16 (Minuta 0-59)                       
+1263..1270 | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                  | uint16 (Reg 1263 až 1270)                  
+
+
+================================================================================
+4. OVĚŘENÍ: DATA PAKETŮ MODBUS VS. HODNOTY Z DISPLEJE A MANUÁLU
+================================================================================
+
+Všechny parametry vyfotografované na 31 obrazovkách displeje přesně odpovídají 
+zachyceným datovým bufferům Modbus RTU a oficiálnímu manuálu výrobce:
+
+1. Záporné teploty (16bitový dvojkový doplněk):
+   - Obrazovka Ochrana (Protect) A04: Venkovní teplota odstavení = -20.0 °C
+     Paket Reg 1043 bajty: [255, 56] -> 0xFF38 = 65336 -> Signed Int16 = -200 -> -20.0 °C
+   - Obrazovka Odmrazování (Defrost) D08: Klouzavý dolní bod AT = -15.0 °C
+     Paket Reg 1108 bajty: [255, 106] -> 0xFF6A = 65386 -> Signed Int16 = -150 -> -15.0 °C
+   - Obrazovka Teplota (Temp) R16: Okamžité spuštění elektrického dohřevu AT = -5.0 °C
+     Paket Reg 1206 bajty: [255, 206] -> 0xFFCE = 65486 -> Signed Int16 = -50 -> -5.0 °C
+   - Obrazovka Teplota (Temp) R18: Kompenzace-VYP při nízké AT = -15.0 °C
+     Paket Reg 1208 bajty: [255, 106] -> 0xFF6A = 65386 -> Signed Int16 = -150 -> -15.0 °C
+
+2. Výčtové hodnoty zjištěné z vyskakovacích nabídek a ověřené v manuálu:
+   - R12 (Režim elektrického dohřevu):
+     0 = Not used (Nepoužito)
+     1 = Waterline (Topný okruh)
+     2 = Water tank (Nádrž TUV)
+     (Aktuální paket: 0)
+   - E01 (Režim nastavení expanzního ventilu EEV):
+     0 = Manual (Ručně)
+     1 = Auto (Automaticky)
+     (Aktuální paket: 1)
+   - P01 (Režim chodu oběhového čerpadla):
+     0 = Ordinary (Běžný trvalý běh)
+     1 = Special (Speciální - vázaný na kompresor)
+     2 = Interval (Intervalový cyklus)
+     (Aktuální paket: 1)
+   - H01 (Autostart / Paměť výpadku napájení):
+     0 = No (Po výpadku zůstat vypnuto)
+     1 = Yes (Pamatovat si stav napájení)
+     (Aktuální paket: 1)
+   - H02 (Jednotka Master/Slave):
+     0 = Master
+     1 = Slave
+     (Aktuální paket: 0)
+   - H04 (Polarita 4cestného ventilu):
+     0 = On-heating (Sepnut při topení)
+     1 = Off-heating (Rozepnut při topení)
+     (Aktuální paket: 0 -> Hodnota na displeji: On-heating)
+   - H05 (Polarita 3cestného ventilu):
+     0 = On-heat water (Sepnut při ohřevu TUV)
+     1 = Off-heat water (Rozepnut při ohřevu TUV)
+     (Aktuální paket: 1 -> Hodnota na displeji: Off-heat water)
+
+3. Systémové časovače:
+   - Časovač ZAP (Timer ON): Hodina 16, Minuta 0 -> Reg 1255 = 1 (Aktivní), Reg 1256 = 16, Reg 1259 = 0
+   - Časovač VYP (Timer OFF): Hodina 20, Minuta 0 -> Reg 1257 = 1 (Aktivní), Reg 1258 = 20, Reg 1260 = 0
+
+
+================================================================================
+5. HLAVNÍ KONFIGURAČNÍ REGISTRY PRO UŽIVATELSKÉ ROZHRANÍ (PRIMÁRNÍ OVLÁDACÍ PRVKY)
+================================================================================
+
+Následující tabulka uvádí primární uživatelské konfigurační registry klíčové 
+pro dashboardy, rozhraní Home Assistant, dotykové panely a externí automatizaci:
+
+Reg  | Modbus Hex | Blok (Příznak) | Uživatelský název           | Povolené hodnoty / Možnosti / Rozsah                    | Měřítko | Krok | Jedn.| Doporučený prvek UI      | Klíč entity v Home Assistant   
+-----+------------+----------------+-----------------------------+---------------------------------------------------------+---------+------+------+--------------------------+--------------------------------
+1011 | 0x03EB     | Blok 1 (0x02)  | Stav napájení (ON/OFF)      | 0 = Vypnuto, 1 = Zapnuto                                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_power_state          
+1012 | 0x03EC     | Blok 1 (0x02)  | Provozní režim              | 0=TUV, 1=Topení, 2=Chlazení, 3=TUV+Top, 4=TUV+Chl       | 1       | 1    | -    | Rozbalovací seznam       | select.hp_operating_mode       
+1031 | 0x03FF     | Blok 1 (0x02)  | Elektrický dohřev (H14)     | 0 = Vypnuto, 1 = Zapnuto                                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_electric_heater      
+1074 | 0x0432     | Blok 1 (0x02)  | Rychlý tichý režim (Fast)   | 0 = Vypnuto, 1 = Zapnuto (Aktivní 8 hod)                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_fast_mute            
+1068 | 0x042C     | Blok 1 (0x02)  | Časovač tichého rež. (F10)  | 0 = Vypnuto (Ne), 1 = Zapnuto (Ano)                     | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_mute_timer_enable    
+1069 | 0x042D     | Blok 1 (0x02)  | Začátek tichého - hod (F11) | 0 .. 23                                                 | 1       | 1    | h    | Číselník / Čas (HH)      | number.hp_mute_timer_start_hour
+1261 | 0x04ED     | Blok 3 (0x08)  | Začátek tichého - min       | 0 .. 59                                                 | 1       | 1    | min  | Číselník / Čas (MM)      | number.hp_mute_timer_start_min 
+1070 | 0x042E     | Blok 1 (0x02)  | Konec tichého - hod (F12)   | 0 .. 23                                                 | 1       | 1    | h    | Číselník / Čas (HH)      | number.hp_mute_timer_end_hour  
+1262 | 0x04EE     | Blok 3 (0x08)  | Konec tichého - min         | 0 .. 59                                                 | 1       | 1    | min  | Číselník / Čas (MM)      | number.hp_mute_timer_end_min   
+1191 | 0x04A7     | Blok 3 (0x08)  | Požadovaná teplota TUV (R01)| R06 .. R07 (Rozsah: 40.0 .. 65.0, tovární: 55.0)        | 0.1     | 0.5  | °C   | Číselník / Termostat     | number.hp_hot_water_setpoint   
+1192 | 0x04A8     | Blok 3 (0x08)  | Požadovaná tepl. topení(R02)| R08 .. R09 (Rozsah: 20.0 .. 50.0, tovární: 40.0)        | 0.1     | 0.5  | °C   | Číselník / Termostat     | number.hp_heating_setpoint     
+1193 | 0x04A9     | Blok 3 (0x08)  | Požadovaná tepl. chlazen(R03)| R10 .. R11 (Rozsah: 12.0 .. 20.0, tovární: 12.0)       | 0.1     | 0.5  | °C   | Číselník / Termostat     | number.hp_cooling_setpoint     
+1255 | 0x04E7     | Blok 3 (0x08)  | Povolení časovače 1 ZAP(T01)| 0 = Vypnuto, 1 = Zapnuto                                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_timer_1_on_enable    
+1256 | 0x04E8     | Blok 3 (0x08)  | Časovač 1 ZAP - hodina (T02)| 0 .. 23                                                 | 1       | 1    | h    | Číselník / Čas (HH)      | number.hp_timer_1_on_hour      
+1259 | 0x04EB     | Blok 3 (0x08)  | Časovač 1 ZAP - minuta (T05)| 0 .. 59                                                 | 1       | 1    | min  | Číselník / Čas (MM)      | number.hp_timer_1_on_minute    
+1257 | 0x04E9     | Blok 3 (0x08)  | Povolení časovače 2 VYP(T03)| 0 = Vypnuto, 1 = Zapnuto                                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_timer_2_off_enable   
+1258 | 0x04EA     | Blok 3 (0x08)  | Časovač 2 VYP - hodina (T04)| 0 .. 23                                                 | 1       | 1    | h    | Číselník / Čas (HH)      | number.hp_timer_2_off_hour     
+1260 | 0x04EC     | Blok 3 (0x08)  | Časovač 2 VYP - minuta (T06)| 0 .. 59                                                 | 1       | 1    | min  | Číselník / Čas (MM)      | number.hp_timer_2_off_minute   
+1167 | 0x048F     | Blok 2 (0x04)  | Režim běhu čerpadla (P01)   | 0 = Běžný, 1 = Speciální, 2 = Interval                  | 1       | 1    | -    | Rozbalovací seznam       | select.hp_pump_running_mode    
+1168 | 0x0490     | Blok 2 (0x04)  | Interval běhu čerpadla (P02)| 0 .. 120                                                | 1       | 1    | min  | Číselník / Posuvník      | number.hp_pump_running_interval
+1169 | 0x0491     | Blok 2 (0x04)  | Doba chodu čerpadla (P03)   | 0 .. 30                                                 | 1       | 1    | min  | Číselník / Posuvník      | number.hp_pump_running_duration
+
+
+================================================================================
+6. ŘÍDICÍ PROVOZNÍ LOGIKA A BEZPEČNOSTNÍ LIMITY (DLE MANUÁLU)
+================================================================================
+
+6.1 Protimrazová ochrana (Parametry A01..A04):
+- Režim chlazení: Po spuštění kompresoru je monitorována teplota výstupní vody T02.
+  Pokud T02 < A01 (výchozí 5.0 °C) NEBO tlak sání < A02 (výchozí 2.0 bar) po dobu 10 s,
+  jednotka přechází do protimrazové ochrany (po 5 minutách chodu kompresoru).
+- Režim topení / TUV: Pokud T02 < T01 - 2.0 °C A ZÁROVEŇ T02 < A01 (5.0 °C), jednotka
+  přechází do protimrazové ochrany.
+- Reakce ochrany: Jednotka zastaví kompresor, stav 4cestného ventilu zůstává nezměněn,
+  oběhové čerpadlo vody TRVALE BĚŽÍ.
+- Automatický reset: Jakmile T02 > A01 + A03 (výchozí 5.0 + 2.0 = 7.0 °C) NEBO tlak sání
+  stoupne zpět na >= A02.
+- Ruční zablokování (Lockout): Pokud ochrana proti zamrznutí sepne více než 3krát během
+  30 minut, automatický restart je zablokován (vyžaduje ruční servisní reset).
+- Odstavení při nízké venkovní teplotě (A04): Pokud je venkovní teplota T07 < A04
+  (výchozí -20.0 °C), jednotka nespustí kompresor tepelného čerpadla. (Nezabraňuje běhu
+  pomocného elektrokotle; pokud elektrokotel běží, čerpadlo musí běžet). Provoz se obnoví,
+  jakmile T07 > A04 + 2.0 °C.
+
+6.2 Logika řízení odmrazování (Parametry D01..D11):
+- Zahájení odmrazování:
+  1. Kontrola začíná 1 minutu po spuštění kompresoru. Pokud tlak sání < D05 (klouzavý
+     spodní limit tlaku, výchozí 5.3 bar / -12 °C), začne odpočet cyklu odmrazování.
+  2. Při poruše snímače tlaku se automaticky uplatní časový cyklus odmrazování D03
+     (výchozí 45 min) s délkou trvání D04 (výchozí 8 min).
+- Průběh cyklu odmrazování:
+  (A) Kompresor zpomalí na 30 Hz.
+  (B) V čase 55 s se zastaví motor ventilátoru a 4cestný ventil přestaví směr.
+  (C) V čase 60 s (+5 s) kompresor zrychlí na odmrazovací frekvenci D11 (výchozí 70 Hz).
+  (D) Pokud je D10 = 1, elektrický dohřev se během odmrazování nuceně zapne.
+- Ukončení odmrazování:
+  Běžné ukončení nastane, když tlak výtlaku T09 > D02 (výchozí 25 bar / 41 °C) A ZÁROVEŇ
+  teplota výparníku T06 > D01 (výchozí 13.0 °C), NEBO po uplynutí maximální doby D04
+  (výchozí 8 min). Jednotka zpomalí na 30 Hz, přepne 4cestný ventil zpět, po 55 s
+  rozběhne ventilátor a zvýší frekvenci.
+
+6.3 Řízení elektronického expanzního ventilu (Parametry E01..E20):
+- Start kompresoru: EEV drží počáteční polohu po dobu prvních 3 minut.
+  Počáteční kroky pro topení = E05 (výchozí 350 N), pokud je venkovní teplota T07 >= 0 °C,
+  nebo E05 + 50 N, pokud je T07 < 0 °C.
+- Po 3 minutách přebírá řízení automatická PID regulace cílící na přehřátí E02 (výchozí 5.0 °C)
+  a přehřátí pro chlazení E11 (výchozí 6.0 °C).
+- Zastavení jednotky: EEV se otevře na 480 kroků na dobu 2 minut a poté se zcela uzavře na 0 kroků.
+- Po odmrazení: EEV se vrátí do výchozí polohy na 3 minuty před opětovnou aktivací PID regulace.
+
+6.4 Spínání oběhového čerpadla vody (Parametry P01..P05):
+- Předstih a doběh: Čerpadlo se spustí nejméně P04 (výchozí 1 min) před startem kompresoru
+  a dobíhá ještě 2 minuty po zastavení kompresoru.
+- Kontrola průtokového spínače: Řídicí jednotka začne sledovat spínač průtoku S03 po uplynutí
+  času P04 - 10 s. Teprve po nepřetržitém sepnutí spínače po dobu 10 s je kompresoru povolen start.
+- Provozní režimy (P01):
+  * 0 = Běžný (trvalý nepřetržitý běh čerpadla)
+  * 1 = Speciální (vázaný na chod kompresoru + předstih a doběh)
+  * 2 = Intervalový (cyklický interval P02 s dobou chodu P03)
+
+6.5 Ekvitermní topné křivky (Parametry R17..R22):
+- Křivka pro nízké venkovní teploty:
+  * R17 = Kompenzace-ZAP při nízké AT (Výchozí 0.0 °C nebo -30.0 °C)
+  * R18 = Kompenzace-VYP při nízké AT (Výchozí -30.0 °C)
+  * R19 = Maximální cílová teplota kompenzace při nízké AT (Výchozí 45.0 °C)
+- Křivka pro vysoké venkovní teploty:
+  * R20 = Kompenzace-ZAP při vysoké AT (Výchozí 55.0 °C)
+  * R21 = Kompenzace-VYP při vysoké AT (Výchozí 55.0 °C)
+  * R22 = Maximální cílová teplota kompenzace při vysoké AT (Výchozí 45.0 °C)
+
+
+================================================================================
+7. HARDWAROVÁ SPECIFIKACE I/O (KÓD 022) A ODPOVÍDAJÍCÍ TELEMETRICKÉ REGISTRY
+================================================================================
+
+7.1 Digitální výstupy (Relé - 5A / 250VAC):
+ID  | Svorka   | Název zařízení / zátěže          | Modbus telemetrický bit| Logika / Aktivní stav         
+----+----------+----------------------------------+------------------------+-------------------------------
+O01 | RO01     | Povolení chodu invertoru kompres.| Reg 2019 Bit 0 (LSB)   | 1 = ZAP, 0 = VYP              
+O02 | RO02     | Primární oběhové čerpadlo vody   | Reg 2019 Bit 1 (LSB)   | 1 = ZAP, 0 = VYP              
+O03 | RO03     | 4cestný reverzační ventil        | Reg 2019 Bit 2 (LSB)   | 1 = ZAP (Top/Odmraz), 0 = VYP 
+O04 | RO04     | Relé motoru ventilátoru          | Reg 2019 Bit 3 (LSB)   | 1 = ZAP, 0 = VYP              
+O05 | -        | Rezervováno                      | Reg 2019 Bit 4 (LSB)   | -                             
+O06 | RO06     | Topný kabel vany kondenzátu      | Reg 2019 Bit 5 (LSB)   | 1 = ZAP, 0 = VYP              
+O07 | RO07     | Topný kabel karteru kompresoru   | Reg 2019 Bit 6 (LSB)   | 1 = ZAP, 0 = VYP              
+O08 | RO08     | Vstřikovací / sprejový ventil    | Reg 2019 Bit 7 (LSB)   | 1 = ZAP, 0 = VYP              
+O09 | RO09     | Pomocný záložní elektrokotel     | Reg 2019 Bit 8 (MSB)   | 1 = ZAP, 0 = VYP              
+O10 | RO10     | Rezervováno                      | Reg 2019 Bit 9 (MSB)   | -                             
+O11 | RO11     | Výstupní signál souhrnného alarmu| Reg 2019 Bit 10 (MSB)  | 1 = ALARM, 0 = OK             
+O12 | RO12     | Cirkulační čerpadlo TUV          | Reg 2019 Bit 11 (MSB)  | 1 = ZAP, 0 = VYP              
+O13 | RO13     | 3cestný přepínací ventil (TUV/Top| Reg 2019 Bit 12 (MSB)  | 1 = TUV, 0 = Topení           
+O14 | -        | Kroky expanzního ventilu EEV     | Reg 2020 (0-500 N)     | 0 .. 500 kroků (Akční člen)   
+
+7.2 Digitální vstupy a bezpečnostní spínače:
+ID  | Svorka   | Název spínače                    | Bit registru Modbus | Logika / Aktivní stav                   
+----+----------+----------------------------------+---------------------+-----------------------------------------
+S01 | AI/DI 23 | Spínač vysokého tlaku (HP)       | Reg 2034 Bit 0      | 0 = Sepnuto (OK), 1 = Rozepnuto (Porucha)
+S02 | AI/DI 24 | Spínač nízkého tlaku (LP)        | Reg 2034 Bit 1      | 0 = Sepnuto (OK), 1 = Rozepnuto (Porucha)
+S03 | AI/DI 25 | Průtokový spínač vody (Flow)     | Reg 2034 Bit 2      | 0 = Sepnuto (Průtok OK), 1 = Bez průtoku
+S04 | AI/DI 26 | Nouzový / dálkový spínač ON/OFF  | Reg 2034 Bit 3      | 0 = Sepnuto (Chod), 1 = Rozepnuto (Stop)
+S05 | AI/DI 27 | Přepínač režimu (Topení/Chlazení)| Reg 2034 Bit 4      | 0 = Sepnuto (Topení), 1 = Rozepnuto(Chl)
+S06 | -        | Rezervováno                      | Reg 2034 Bit 5      | -                                       
+S07 | AI/DI 29 | Ochrana přetížení elektrokotle   | Reg 2034 Bit 6      | 0 = Sepnuto (OK), 1 = Rozepnuto (Vybav.)
+S08 | -        | Rezervováno                      | Reg 2034 Bit 7      | -                                       
+
+Registr aktivního chybového kódu:
+- Registr 2085 (Bajtové offsety 175-176) obsahuje aktivní číselný kód chyby/alarmu 
+  při výskytu jakékoli poruchy (např. E11, E12, E032, F01..F26).
+
+7.3 Analogové senzory teploty a tlaku:
+ID  | Svorka   | Název senzoru                      | Typ senzoru / Křivka   | Modbus Reg | Měřítko 
+----+----------+------------------------------------+------------------------+------------+---------
+T01 | AI/DI 01 | Teplota vstupní vody               | NTC 5kΩ @ 25°C         | Reg 2045   | 0.1 °C  
+T02 | AI/DI 02 | Teplota výstupní vody              | NTC 5kΩ @ 25°C         | Reg 2046   | 0.1 °C  
+T03 | AI/DI 03 | Teplota výtlačných plynů           | NTC 50kΩ @ 25°C        | Reg 2047   | 0.1 °C  
+T04 | AI/DI 08 | Teplota v nádrži TUV / bojleru     | NTC 10kΩ @ 25°C        | Reg 2048   | 0.1 °C  
+T05 | AI/DI 05 | Teplota nasávaných plynů           | NTC 5kΩ @ 25°C         | Reg 2049   | 0.1 °C  
+T06 | AI/DI 06 | Teplota výparníku                  | NTC 5kΩ @ 25°C         | Reg 2050   | 0.1 °C  
+T07 | AI/DI 07 | Teplota venkovního okolí           | NTC 5kΩ @ 25°C         | Reg 2051   | 0.1 °C  
+T08 | AI/DI 21 | Snímač nízkého tlaku sání (LP)     | Poměrový (0-20 bar)    | Reg 2052   | 0.1 bar 
+T09 | AI/DI 22 | Snímač vysokého tlaku výtlaku (HP) | Poměrový (0-50 bar)    | Reg 2053   | 0.1 bar 
+
+7.4 Telemetrie invertoru, elektrických veličin a ventilátoru:
+ID  | Název parametru                 | Popis / Subsystém                        | Modbus Reg | Měřítko / Jedn.
+----+---------------------------------+------------------------------------------+------------+----------------
+T10 | Skutečná frekvence kompresoru   | Živá frekvence kompresoru invertoru      | Reg 2054   | 1.0 Hz         
+T11 | Cílová frekvence kompresoru     | Požadovaná frekvence z PID regulace      | Reg 2055   | 1.0 Hz         
+T12 | Skutečné otáčky ventilátoru 1   | Aktuální otáčky primárního DC ventilátoru| Reg 2056   | 1 ot./min      
+T13 | Skutečné otáčky ventilátoru 2   | Aktuální otáčky sekundárního ventilátoru | Reg 2057   | 1 ot./min      
+T14 | Přehřátí na sání                | Vypočtené přehřátí na sání výparníku     | Reg 2058   | 0.1 °C         
+T15 | Přehřátí na výtlaku             | Vypočtené přehřátí plynů výtlaku         | Reg 2059   | 0.1 °C         
+T16 | Ochranná teplota modulu invert. | Teplota chladiče / IPM modulu            | Reg 2060   | 0.1 °C         
+T17 | Síťové vstupní střídavé napětí  | Efektivní vstupní AC napětí sítě         | Reg 2061   | 1.0 V          
+T18 | Síťový vstupní střídavý proud   | Celkový efektivní AC proud ze sítě       | Reg 2062   | 0.1 A          
+T19 | Fázový proud kompresoru         | Výstupní fázový proud invertoru (U/V/W)  | Reg 2063   | 0.1 A          
+T20 | Napětí stejnosměrné meziobv. DC | Napětí interní stejnosměrné DC sběrnice  | Reg 2064   | 1.0 V          
+T21 | Teplota modulu invertoru IPM/PIM| Interní termistor výkonového modulu      | Reg 2065   | 0.1 °C         
+T22 | Cílové otáčky ventilátoru       | Požadované otáčky ventilátoru z řízení   | Reg 2067   | 1 ot./min      
+
+
+================================================================================
+8. KOMPLETNÍ MATICE CHYBOVÝCH KÓDŮ A ALARMŮ (DLE SERVISNÍHO MANUÁLU)
+================================================================================
+Když sepne bezpečnostní ochrana nebo komponenta vstoupí do chybového stavu,
+hlavní řídicí jednotka tepelného čerpadla zaregistruje alarm. Alarm se zobrazí na
+fyzickém LCD displeji, zaznamená se do historie poruch (obrazovka "Failure Logging",
+přístupový kód 066 / 022), odvysílá se přes telemetrii (Registr 2085 a bitové pole
+Registru 2034) a sepne výstupní relé souhrnného alarmu RO11 (Registr 2019 Bit 10).
+
+--------------------------------------------------------------------------------
+8.1 Kódy poruch senzorů teploty a tlaku (P-kódy a PP-kódy)
+--------------------------------------------------------------------------------
+Kód  | Subsystém / Funkce       | Popis poruchy                    | Příčina / Podmínka                  | Náprava / Odstranění závady              
+-----+--------------------------+----------------------------------+-------------------------------------+------------------------------------------
+P01  | Vodní okruh (Vstup)      | Porucha čidla vstupní vody       | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit čidlo T01 (NTC 5k)
+P02  | Vodní okruh (Výstup)     | Porucha čidla výstupní vody      | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit čidlo T02 (NTC 5k)
+P03  | Vodní okruh (Nádrž TUV)  | Čidlo teploty v nádrži TUV       | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit čidlo T04 (NTC 10k)
+P04  | Okolí (Venkovní)         | Čidlo venkovní teploty okolí     | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit čidlo T07 (NTC 5k)
+P17  | Chladivo (Sání)          | Porucha čidla teploty sání plynů | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit čidlo T05 (NTC 5k)
+P153 | Chladivo (Výparník)      | Čidlo teploty výparníku          | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit čidlo T06 (NTC 5k)
+P181 | Chladivo (Výtlak)        | Porucha čidla teploty výtlaku    | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit čidlo T03 (NTC 50k)
+P182 | Chladivo (Přehřátí)      | Porucha čidla přehřátí výtlaku   | Čidlo poškozené, přerušené, zkrat   | Zkontrolovat / vyměnit čidlo T03         
+PP1  | Tlak (Vysokotlaká strana)| Čidlo vysokého tlaku na výtlaku  | Tlakový převodník vadný/přerušený   | Zkontrolovat / vyměnit snímač T09 (0-50b)
+PP2  | Tlak (Nízkotlaká strana) | Čidlo nízkého tlaku na sání      | Tlakový převodník vadný/přerušený   | Zkontrolovat / vyměnit snímač T08 (0-20b)
+
+--------------------------------------------------------------------------------
+8.2 Bezpečnostní a provozní ochranné kódy systému (E-kódy)
+--------------------------------------------------------------------------------
+Kód  | Subsystém / Funkce          | Popis poruchy                    | Příčina / Podmínka                  | Náprava / Odstranění závady         
+-----+-----------------------------+----------------------------------+-------------------------------------+-------------------------------------
+TP   | Tepelná ochrana             | Ochrana nízké venkovní teploty   | Venkovní teplota T07 < A04 (-20 °C) | Auto restart, když T07 > A04 + 2 °C 
+E04  | Elektrický obvod            | Přehřátí elektrického okruhu     | Přetížení kompresoru / horký obvod  | Zkontrolovat proudové zatížení komp.
+E06  | Vodní soustava              | Nadměrný rozdíl teplot vody      | Velký rozdíl teplot mezi T01 a T02  | Zkontrolovat průtok, čerpadlo, bypass
+E08  | Komunikace                  | Komunikace deska <-> LCD displej | Závada komunikačního kabelu/vedení  | Zkontrolovat sběrnici RS-485 / spoje
+E11  | Bezpečn. spínač (Vysokotlak)| Spínač ochrany vysokého tlaku    | Rozepnut spínač vysokého tlaku S01  | Zkontrolovat chladivový okruh a S01 
+E12  | Bezpečn. spínač (Nízkotlak) | Spínač ochrany nízkého tlaku     | Rozepnut spínač nízkého tlaku S02   | Zkontrolovat chladivový okruh a S02 
+E19  | Protimrazová ochrana        | Primární protimrazová ochrana    | Nízká teplota, T02 < A01 (5 °C)     | Běží čerpadlo, reset: T02 > A01+A03 
+E29  | Protimrazová ochrana        | Sekundární protimrazová ochrana  | Kriticky nízká venkovní teplota     | Stupňovitá ochrana proti zamrznutí  
+E032 | Bezpečnost průtoku vody     | Ochrana průtokového spínače      | Průtokový spínač S03 rozepnut       | Zkontrolovat oběh vody, čerpadlo    
+E051 | Ochrana kompresoru          | Proudové přetížení kompresoru    | Nadměrný provozní proud kompresoru  | Zkontrolovat kompresor a napájení   
+E171 | Bezpečnost vodní soustavy   | Ochrana průtoku při nemrzn. rež. | Nedostatečný průtok při topení      | Zkontrolovat potrubí, ventily, filtr
+E081 | Komunikace ventilátoru      | Komunikace řízení ventilátoru    | Ztráta komunikace desky s pohonem   | Zkontrolovat kabel RS-485 k pohonu  
+F031 | Pohon ventilátoru (Motor 1) | Porucha DC motoru ventilátoru 1  | Zablokovaný rotor nebo odpojeno     | Zkontrolovat / vyměnit Motor 1      
+F032 | Pohon ventilátoru (Motor 2) | Porucha DC motoru ventilátoru 2  | Zablokovaný rotor nebo odpojeno     | Zkontrolovat / vyměnit Motor 2      
+
+--------------------------------------------------------------------------------
+8.3 Poruchové kódy invertoru a napájecího zdroje (F-kódy)
+--------------------------------------------------------------------------------
+Kód  | Subsystém / Funkce    | Popis poruchy                     | Příčina / Podmínka                  | Náprava / Odstranění závady            
+-----+-----------------------+-----------------------------------+-------------------------------------+----------------------------------------
+F01  | Invertor kompresoru   | Ztráta fáze / Chyba hardwaru poh. | Vadný krok/hardware pohonu kompres. | Zkontrolovat napětí a desku invertoru  
+F03  | Výkonová elektronika  | Obvod korekce účiníku (PFC)       | Vybavení PFC obvodu / spálená poj.  | Zkontrolovat pojistku a obvod PFC      
+F05  | Napájení (DC sběrnice)| Přepětí na DC meziobvodu          | Napětí DC sběrnice > mez přepětí    | Zkontrolovat vstupní AC a DC sběrnici  
+F06  | Napájení (DC sběrnice)| Podpětí na DC meziobvodu          | Napětí DC sběrnice < mez podpětí    | Zkontrolovat vstupní AC a DC sběrnici  
+F07  | Napájení (Vstup AC)   | Podpětí na vstupu AC / Nízký proud| Příliš nízké vstupní napětí         | Zkontrolovat napájecí síť AC           
+F08  | Napájení (Vstup AC)   | Nadproud na vstupu AC / Přepětí   | Příliš vysoké vstupní napětí/proud  | Zkontrolovat napájecí síť AC           
+F09  | Výkonový modul IPM    | Nadproud modulu IPM / Vzorkování  | Nadměrný proud IPM / chyba měření   | Zkontrolovat proudové obvody IPM       
+F10  | Interní sběrnice      | Chyba komunikace DSP s PFC        | Uvolněný spoj mezi DSP a PFC deskou | Zkontrolovat interní konektory         
+F11  | Mikrokontrolér        | Interní chyba komunikace DSP      | Selhání interní komunikace DSP      | Zkontrolovat desku řízení DSP          
+F12  | Komunikace            | Chyba komunikace desky invertoru  | Výpadek linky mezi invertorem a PCB | Zkontrolovat RS-485 invertoru (Slave 4)
+F13  | Výkonový modul IPM    | Odstavení z přehřátí modulu IPM   | Teplota chladiče / IPM příliš vysoká| Zkontrolovat teplovodivou pastu, proud 
+F14  | Motor kompresoru      | Slabý magnetismus kompresoru      | Oslabení magnetického toku motoru   | Zkontrolovat motor kompresoru          
+F15  | Napájení (Síť AC)     | Chybějící fáze na vstupu AC       | Výpadek fáze napájecí sítě AC       | Zkontrolovat připojení fází k síti     
+F16  | Měření proudu         | Chyba vzorkování proudu IPM       | Závada obvodu měření proudu         | Zkontrolovat měřicí obvody IPM         
+F17  | Teplotní senzor       | Čidlo teploty modulu / chladiče   | Rozepnuté / vadné čidlo chladiče    | Zkontrolovat / vyměnit čidlo chladiče  
+F20  | Výkonová elektronika  | Přehřátí výkonových spínačů IGBT  | Teplota křemíku IGBT příliš vysoká  | Zkontrolovat chlazení a zátěž          
+F21  | Proud kompresoru      | Nadproud kompresoru               | Vstupní proud kompresoru moc vysoký | Zkontrolovat mechanickou zátěž kompres.
+F22  | Celkový proud         | Celkový nadproud na vstupu AC     | Celkový proud ze sítě příliš vysoký | Zkontrolovat elektrickou zátěž jednotky
+F23  | Paměť mikrokontroléru | Chyba paměti EEPROM               | Selhání čtení/zápisu paměti MCU     | Zkontrolovat MCU / paměťový čip        
+F24  | Zabezpečení firmwaru  | Porušení ochrany zápisu EEPROM    | Chyba ochrany paměti MCU            | Zkontrolovat integritu MCU / firmwaru  
+F25  | Nízkonapěťová větev   | Nízké napětí na větvi 15V         | Větev V15V mimo rozsah 13,5V - 16,5V| Zkontrolovat pomocný 15V zdroj         
+F26  | Výkonová elektronika  | Přehřátí výkonových spínačů IGBT  | Nadměrná teplota snímače IGBT       | Zkontrolovat chlazení a zátěž          
+
+
+================================================================================
+9. HARDWARE ŘÍDICÍ DESKY, TYPY SENZORŮ A ZAPOJENÍ SVOREK (PC8002 PCB)
+================================================================================
+Model hlavní řídicí desky : PC8002 (Sestava desek: 35005-310738 + 35005-310739)
+Mikrokontrolér            : Vyhrazená architektura DSP + MCU
+Odolnost proti rušení sb. : Odolnost proti skupinovým impulsům až do 4000 V
+Dosah přenosu sběrnice    : Až 100 - 200 m mezi venkovní PCB a nástěnným LCD ovladačem
+Regulace teploty          : Přesnost regulace přehřátí 0,1 °C
+
+Zapojení svorek a zatížitelnost:
+- Digitální výstupní relé (5A / 250VAC odporová zátěž):
+  * RO01 : Příkaz pro chod invertoru kompresoru (O01 / Reg 2019 Bit 0)
+  * RO02 : Primární oběhové čerpadlo vody (O02 / Reg 2019 Bit 1)
+  * RO03 : 4cestný reverzační ventil (O03 / Reg 2019 Bit 2)
+  * RO04 : Relé chodu motoru ventilátoru (O04 / Reg 2019 Bit 3)
+  * RO06 : Topný kabel vany kondenzátu (O06 / Reg 2019 Bit 5)
+  * RO07 : Topný kabel karteru kompresoru (O07 / Reg 2019 Bit 6)
+  * RO08 : Vstřikovací / sprejový ventil (O08 / Reg 2019 Bit 7)
+  * RO09 : Pomocný záložní elektrokotel / 3kW dohřev (O09 / Reg 2019 Bit 8)
+  * RO11 : Hlášení souhrnné poruchy / alarm (O11 / Reg 2019 Bit 10)
+  * RO12 : Cirkulační čerpadlo TUV (O12 / Reg 2019 Bit 11)
+  * RO13 : 3cestný přepínací ventil topení / TUV (O13 / Reg 2019 Bit 12)
+
+- Analogové vstupy a specifikace senzorů:
+  * T01 (Teplota vstupní vody)     : Svorka AI/DI 01 -> NTC 5kΩ @ 25°C (Reg 2045, měřítko 0.1 °C)
+  * T02 (Teplota výstupní vody)    : Svorka AI/DI 02 -> NTC 5kΩ @ 25°C (Reg 2046, měřítko 0.1 °C)
+  * T03 (Teplota výtlačných plynů) : Svorka AI/DI 03 -> NTC 50kΩ @ 25°C (Reg 2047, měřítko 0.1 °C)
+  * T04 (Teplota nádrže TUV / bojler): Svorka AI/DI 08 -> NTC 10kΩ @ 25°C (Reg 2048, měřítko 0.1 °C)
+  * T05 (Teplota nasávaných plynů) : Svorka AI/DI 05 -> NTC 5kΩ @ 25°C (Reg 2049, měřítko 0.1 °C)
+  * T06 (Teplota výparníku)        : Svorka AI/DI 06 -> NTC 5kΩ @ 25°C (Reg 2050, měřítko 0.1 °C)
+  * T07 (Venkovní teplota okolí)   : Svorka AI/DI 07 -> NTC 5kΩ @ 25°C (Reg 2051, měřítko 0.1 °C)
+  * T08 (Tlak sání)                : Svorka AI/DI 21 -> 5kΩ / poměrový 0-20 bar (Reg 2052, měřítko 0.1 bar)
+  * T09 (Tlak výtlaku)             : Svorka AI/DI 22 -> 5kΩ / poměrový 0-50 bar (Reg 2053, měřítko 0.1 bar)
+
+- Digitální vstupy (Beznapěťový kontakt):
+  * S01 (Spínač vysokého tlaku HP) : Svorka AI/DI 23 (Reg 2034 Bit 0)
+  * S02 (Spínač nízkého tlaku LP)  : Svorka AI/DI 24 (Reg 2034 Bit 1)
+  * S03 (Průtokový spínač vody)    : Svorka AI/DI 25 (Reg 2034 Bit 2)
+  * S04 (Nouzové/dálkové vypnutí)  : Svorka AI/DI 26 (Reg 2034 Bit 3)
+  * S05 (Přepínač režimu Topení/Chl: Svorka AI/DI 27 (Reg 2034 Bit 4)
+  * S07 (Ochrana přetížení el.dohř): Svorka AI/DI 29 (Reg 2034 Bit 6)
+
+- Krokový akční člen:
+  * EEV (Elektronický expanzní ventil): 5vodičový krokový motor, 0 až 500 kroků (O14 / Reg 2020)
+
+================================================================================
+KONEC SPECIFIKAČNÍHO SOUBORU
+================================================================================
