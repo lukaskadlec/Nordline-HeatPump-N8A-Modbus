@@ -52,18 +52,7 @@ This project offers two implementation paths:
                                              |  - HACS Integration (Direct)|
                                              |  OR Node-RED -> MQTT      |
                                              +---------------------------+
-```text
-+-----------------------+                    +---------------------------+
-| Physical LCD Wall Unit|                    | USB-to-RS485 Dongle       |
-| (Slave ID 1)          |<---+          +--->| (e.g. /dev/ttyUSB-TC)     |
-+-----------------------+    |          |    +---------------------------+
-                             |  RS-485  |                  |
-+-----------------------+    |  2-Wire  |                  v
-| Heat Pump Master Board|----+-- Bus ---+    +---------------------------+
-| (PC8002 PCB)          |                    |  Home Assistant           |
-+-----------------------+                    |  - HACS Integration (Direct)|
-                                             |  OR Node-RED -> MQTT      |
-                                             +---------------------------+
+
 ```
 
 1. **Master Controller (PC8002 PCB)** cyclically broadcasts status frames (`00, 16, 07` and `00, 16, 08`) and polls the LCD display (`01, 03, 0B, B9, 00, 15`) every second.
