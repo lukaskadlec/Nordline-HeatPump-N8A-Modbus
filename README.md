@@ -7,7 +7,7 @@
 Bidirectional monitoring, telemetry, and full configuration control integration for the **Nordline N8A Air-to-Water Heat Pump** (equipped with the **PC8002 PCB Controller** and **Slave 1 LCD Wall Unit**).
 
 This project offers two implementation paths:
-1. **Native Home Assistant Custom Integration (HACS) [Recommended]**: Direct local serial port connection (`/dev/ttyUSB*`), zero Node-RED or MQTT dependencies, UI Config Flow, native `climate` thermostat entity, 42 telemetry sensors, 21 primary controls, 88 configuration registers, built-in 10-second silence watchdog.
+1. **Native Home Assistant Custom Integration (HACS) [Recommended]**: Direct local serial port connection (`/dev/ttyUSB*`), zero Node-RED or MQTT dependencies, UI Config Flow, 42 telemetry sensors, 21 primary controls, 88 configuration registers, built-in 10-second silence watchdog.
 2. **Node-RED & MQTT Alternative**: Streamlined production flow ([`flows.json`](flows.json)) with all debugging and scratch file-logging removed, communicating via MQTT Discovery.
 
 ---
@@ -122,7 +122,6 @@ To cleanly switch between physical control and automation, a red rocker power sw
 The native custom component (`custom_components/nordline_heatpump`) connects directly to the USB serial adapter without requiring Node-RED or an MQTT broker.
 
 ### Features:
-- **Native Thermostat**: Unified `climate` entity (`Thermostat`) with Heating, Cooling, and Off modes + target setpoint slider.
 - **All 109 Registers & 42 Telemetry Sensors**: Automatically creates entities for all parameters.
 - **Built-in 10-Second Watchdog**: Auto-detects physical LCD silence and seamlessly takes over.
 - **Daily EEPROM Writes Tracking**: Real-time diagnostic sensor monitoring non-volatile memory write operations.
@@ -139,7 +138,7 @@ The native custom component (`custom_components/nordline_heatpump`) connects dir
 7. Go to **Settings** -> **Devices & Services** -> **Add Integration**.
 8. Search for **Nordline Heat Pump N8A Modbus**.
 9. Select your serial port (e.g. `/dev/ttyUSB-TC` or `/dev/serial/by-id/...`) and baud rate (`9600`), then click **Submit**.
-10. The heat pump device will appear immediately with all climate controls, sensors, and configuration switches!
+10. The heat pump device will appear immediately with all sensors, controls, and configuration switches!
 
 ### Manual Installation (Alternative):
 1. Copy the `custom_components/nordline_heatpump` directory into your Home Assistant `/config/custom_components/` folder:
@@ -147,6 +146,28 @@ The native custom component (`custom_components/nordline_heatpump`) connects dir
    cp -r custom_components/nordline_heatpump /config/custom_components/
    ```
 2. Restart Home Assistant and follow steps 7–10 above.
+
+### Docker Configuration (Home Assistant Container):
+If you are running Home Assistant Container (Docker / Docker Compose), configure your `docker-compose.yml` to grant access to the USB serial adapter and enable hardware auto-discovery:
+
+```yaml
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    # ...
+    volumes:
+      # ...
+      - /dev:/dev             # Exposes device nodes for hot-plugging
+      - /run/udev:/run/udev:ro # Enables Home Assistant hardware auto-discovery
+    device_cgroup_rules:
+      - 'c 188:* rmw'         # USB-to-serial (/dev/ttyUSB*)
+      - 'c 166:* rmw'         # CDC-ACM devices (/dev/ttyACM*)
+    group_add:
+      - "20"                  # Debian/Ubuntu dialout group
+```
+
+> [!TIP]
+> This configuration allows Home Assistant to detect and communicate with `/dev/ttyUSB*` devices dynamically without running the container in insecure `privileged` mode, retaining device permissions even across hot-plugging or host reboots.
 
 ---
 

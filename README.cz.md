@@ -7,7 +7,7 @@
 Obousměrné monitorování, telemetrie a plné konfigurační řízení pro tepelné čerpadlo **Nordline N8A vzduch-voda** (vybavené řídicí deskou **PC8002 PCB** a nástěnnou LCD jednotkou **Slave 1**).
 
 Tento projekt nabízí dvě cesty nasazení:
-1. **Nativní integrace pro Home Assistant (HACS) [Doporučeno]**: Přímé připojení přes lokální sériový port USB (`/dev/ttyUSB*`), nulová závislost na Node-RED či MQTT brokeru, grafická konfigurace (UI Config Flow), nativní termostatová entita `climate`, 42 telemetrických senzorů, 21 primárních ovládacích prvků, 88 konfiguračních registrů, vestavěný 10sekundový watchdog ticha fyzického LCD.
+1. **Nativní integrace pro Home Assistant (HACS) [Doporučeno]**: Přímé připojení přes lokální sériový port USB (`/dev/ttyUSB*`), nulová závislost na Node-RED či MQTT brokeru, grafická konfigurace (UI Config Flow), 42 telemetrických senzorů, 21 primárních ovládacích prvků, 88 konfiguračních registrů, vestavěný 10sekundový watchdog ticha fyzického LCD.
 2. **Alternativa přes Node-RED a MQTT**: Odladěný produkční tok ([`flows.json`](flows.json)) s odstraněným laděním a pomocnými zápisy do souborů, komunikující přes MQTT Discovery.
 
 ---
@@ -109,7 +109,6 @@ Pro čisté přepínání mezi fyzickým ovládáním a automatizací byl do sé
 Nativní uživatelská komponenta (`custom_components/nordline_heatpump`) komunikuje přímo s převodníkem USB-RS485 a nevyžaduje Node-RED ani MQTT broker.
 
 ### Vlastnosti:
-- **Nativní termostat**: Sjednocená entita `climate` (`Termostat`) s režimy Topení, Chlazení a Vypnuto + posuvníkem žádané teploty.
 - **Všech 109 registrů a 42 telemetrických senzorů**: Automaticky vytvoří přehledné entity pro veškeré parametry.
 - **Vestavěný 10sekundový watchdog**: Automaticky detekuje ticho fyzického LCD panelu a hladce převezme řízení.
 - **Ochrana životnosti EEPROM**: Integrovaný denní čítač a omezovač zápisů vynucující bezpečný strop **20 zápisů za den**.
@@ -126,7 +125,7 @@ Nativní uživatelská komponenta (`custom_components/nordline_heatpump`) komuni
 7. V Home Assistant přejděte do **Nastavení** -> **Zařízení a služby** -> **Přidat integraci**.
 8. Vyhledejte **Nordline Heat Pump N8A Modbus**.
 9. Zvolte váš sériový port (např. `/dev/ttyUSB-TC` nebo `/dev/serial/by-id/...`), přenosovou rychlost (`9600`) a potvrďte tlačítkem **Odeslat**.
-10. Zařízení tepelného čerpadla se okamžitě zobrazí se všemi ovládacími prvky, termostatem, senzory a konfiguračními přepínači!
+10. Zařízení tepelného čerpadla se okamžitě zobrazí se všemi ovládacími prvky, senzory a konfiguračními přepínači!
 
 ### Manuální instalace (Alternativa):
 1. Zkopírujte složku `custom_components/nordline_heatpump` do vašeho adresáře `/config/custom_components/` v Home Assistant:
@@ -134,6 +133,28 @@ Nativní uživatelská komponenta (`custom_components/nordline_heatpump`) komuni
    cp -r custom_components/nordline_heatpump /config/custom_components/
    ```
 2. Restartujte Home Assistant a postupujte podle kroků 7–10 výše.
+
+### Konfigurace pro Docker (Home Assistant Container):
+Pokud provozujete Home Assistant v Dockeru (Docker / Docker Compose), zajistěte v `docker-compose.yml` přístup k USB sériovému převodníku a udev autodetekci:
+
+```yaml
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    # ...
+    volumes:
+      # ...
+      - /dev:/dev             # Zpřístupňuje uzly zařízení pro hot-plugging
+      - /run/udev:/run/udev:ro # Umožňuje automatickou detekci hardware v Home Assistant
+    device_cgroup_rules:
+      - 'c 188:* rmw'         # USB-to-serial převodníky (/dev/ttyUSB*)
+      - 'c 166:* rmw'         # Zařízení CDC-ACM (/dev/ttyACM*)
+    group_add:
+      - "20"                  # Skupina dialout pro Debian/Ubuntu
+```
+
+> [!TIP]
+> Tato konfigurace umožňuje kontejneru komunikovat s USB sériovými převodníky (`/dev/ttyUSB*`) dynamicky bez nutnosti spouštět celý kontejner v nebezpečném režimu `privileged`. Zajišťuje stálá přístupová práva i po odpojení/znovupřipojení převodníku nebo restartu hostitele.
 
 ---
 

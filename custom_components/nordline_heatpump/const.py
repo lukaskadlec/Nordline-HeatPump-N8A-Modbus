@@ -566,7 +566,6 @@ TELEMETRY_SENSORS_META: dict[str, dict[str, Any]] = {
     "Alarm (O11)": {
         "component": "binary_sensor",
         "devClass": "problem",
-        "entityCategory": "diagnostic",
         "name": "[Output] O11 Alarm Output",
         "icon": "mdi:alert-circle"
     },
@@ -622,6 +621,7 @@ TELEMETRY_SENSORS_META: dict[str, dict[str, Any]] = {
     },
     "Mode Switch (S05)": {
         "component": "binary_sensor",
+        "entityCategory": "diagnostic",
         "name": "[Alarm] S05 Mode Switch",
         "icon": "mdi:toggle-switch"
     },
