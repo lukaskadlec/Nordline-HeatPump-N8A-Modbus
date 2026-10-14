@@ -1,12 +1,17 @@
 {
   "domain": "nordline_heatpump",
   "name": "Nordline Heat Pump N8A Modbus",
-  "codeowners": ["@lukaskadlec"],
+  "codeowners": [
+    "@lukaskadlec"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/lukaskadlec/Nordline-HeatPump-N8A-Modbus",
   "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/lukaskadlec/Nordline-HeatPump-N8A-Modbus/issues",
-  "requirements": ["pyserial>=3.5", "pyserial-asyncio-fast>=0.14"],
-  "version": "1.0.0"
+  "requirements": [
+    "pyserial>=3.5",
+    "pyserial-asyncio-fast>=0.14"
+  ],
+  "version": "1.0.1"
 }

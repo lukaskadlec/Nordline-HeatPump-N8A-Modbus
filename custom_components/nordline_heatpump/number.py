@@ -15,7 +15,7 @@ from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONFIG_REGISTERS, DOMAIN
+from .const import CONFIG_REGISTERS, DOMAIN, TIME_REGISTER_NUMBERS
 from .entity import NordlineHeatPumpEntity
 from .hub import NordlineHeatPumpHub
 
@@ -34,6 +34,9 @@ async def async_setup_entry(
 
     for item in CONFIG_REGISTERS:
         if item.get("component") != "number":
+            continue
+        # Exclude registers that have been compacted into Time entities
+        if item.get("reg") in TIME_REGISTER_NUMBERS:
             continue
         entities.append(NordlineHeatPumpNumber(hub, item))
 

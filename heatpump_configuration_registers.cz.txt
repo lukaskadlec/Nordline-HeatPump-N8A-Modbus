@@ -79,10 +79,10 @@ stavu a telemetrie strukturovanou taxonomii:
    - Heating Setpoint (number.hp_heating_setpoint)
    - Hot Water Setpoint (number.hp_hot_water_setpoint)
    - Cooling Setpoint (number.hp_cooling_setpoint)
-   - Timer 1 (ON) Enable / Hour / Minute (switch.hp_timer_1_on_enable, atd.)
-   - Timer 2 (OFF) Enable / Hour / Minute (switch.hp_timer_2_off_enable, atd.)
+   - Časovač 1 ZAP - Povolení / Čas (switch.hp_timer_1_on_enable, time.hp_timer_1_time [Reg 1256 + 1259])
+   - Časovač 2 VYP - Povolení / Čas (switch.hp_timer_2_off_enable, time.hp_timer_2_time [Reg 1258 + 1260])
    - Fast Mute (switch.hp_fast_mute)
-   - Mute Timer Enable / Start / End (switch.hp_mute_timer_enable, atd.)
+   - Tichý časovač - Povolení / Začátek / Konec (switch.hp_mute_timer_enable, time.hp_mute_start_time [Reg 1069 + 1261], time.hp_mute_end_time [Reg 1070 + 1262])
    - Electric Heater (switch.hp_electric_heater)
    - Pump Running Mode / Interval / Duration (select.hp_pump_running_mode, atd.)
 
@@ -340,19 +340,19 @@ Reg  | Modbus Hex | Blok (Příznak) | Uživatelský název           | Povolen�
 1031 | 0x03FF     | Blok 1 (0x02)  | Elektrický dohřev (H14)     | 0 = Vypnuto, 1 = Zapnuto                                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_electric_heater      
 1074 | 0x0432     | Blok 1 (0x02)  | Rychlý tichý režim (Fast)   | 0 = Vypnuto, 1 = Zapnuto (Aktivní 8 hod)                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_fast_mute            
 1068 | 0x042C     | Blok 1 (0x02)  | Časovač tichého rež. (F10)  | 0 = Vypnuto (Ne), 1 = Zapnuto (Ano)                     | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_mute_timer_enable    
-1069 | 0x042D     | Blok 1 (0x02)  | Začátek tichého - hod (F11) | 0 .. 23                                                 | 1       | 1    | h    | Číselník / Čas (HH)      | number.hp_mute_timer_start_hour
-1261 | 0x04ED     | Blok 3 (0x08)  | Začátek tichého - min       | 0 .. 59                                                 | 1       | 1    | min  | Číselník / Čas (MM)      | number.hp_mute_timer_start_min 
-1070 | 0x042E     | Blok 1 (0x02)  | Konec tichého - hod (F12)   | 0 .. 23                                                 | 1       | 1    | h    | Číselník / Čas (HH)      | number.hp_mute_timer_end_hour  
-1262 | 0x04EE     | Blok 3 (0x08)  | Konec tichého - min         | 0 .. 59                                                 | 1       | 1    | min  | Číselník / Čas (MM)      | number.hp_mute_timer_end_min   
+1069 | 0x042D     | Blok 1 (0x02)  | Začátek tichého - hod (F11)| 0 .. 23                                                 | 1       | 1    | h    | Čas (HH) [Sloučeno]      | time.hp_mute_start_time (Hodina)
+1261 | 0x04ED     | Blok 3 (0x08)  | Začátek tichého - min      | 0 .. 59                                                 | 1       | 1    | min  | Čas (MM) [Sloučeno]      | time.hp_mute_start_time (Minuta)
+1070 | 0x042E     | Blok 1 (0x02)  | Konec tichého - hod (F12)  | 0 .. 23                                                 | 1       | 1    | h    | Čas (HH) [Sloučeno]      | time.hp_mute_end_time (Hodina)  
+1262 | 0x04EE     | Blok 3 (0x08)  | Konec tichého - min        | 0 .. 59                                                 | 1       | 1    | min  | Čas (MM) [Sloučeno]      | time.hp_mute_end_time (Minuta)  
 1191 | 0x04A7     | Blok 3 (0x08)  | Požadovaná teplota TUV (R01)| R06 .. R07 (Rozsah: 40.0 .. 65.0, tovární: 55.0)        | 0.1     | 0.5  | °C   | Číselník / Termostat     | number.hp_hot_water_setpoint   
 1192 | 0x04A8     | Blok 3 (0x08)  | Požadovaná tepl. topení(R02)| R08 .. R09 (Rozsah: 20.0 .. 50.0, tovární: 40.0)        | 0.1     | 0.5  | °C   | Číselník / Termostat     | number.hp_heating_setpoint     
 1193 | 0x04A9     | Blok 3 (0x08)  | Požadovaná tepl. chlazen(R03)| R10 .. R11 (Rozsah: 12.0 .. 20.0, tovární: 12.0)       | 0.1     | 0.5  | °C   | Číselník / Termostat     | number.hp_cooling_setpoint     
 1255 | 0x04E7     | Blok 3 (0x08)  | Povolení časovače 1 ZAP(T01)| 0 = Vypnuto, 1 = Zapnuto                                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_timer_1_on_enable    
-1256 | 0x04E8     | Blok 3 (0x08)  | Časovač 1 ZAP - hodina (T02)| 0 .. 23                                                 | 1       | 1    | h    | Číselník / Čas (HH)      | number.hp_timer_1_on_hour      
-1259 | 0x04EB     | Blok 3 (0x08)  | Časovač 1 ZAP - minuta (T05)| 0 .. 59                                                 | 1       | 1    | min  | Číselník / Čas (MM)      | number.hp_timer_1_on_minute    
+1256 | 0x04E8     | Blok 3 (0x08)  | Časovač 1 ZAP - hodina (T02)| 0 .. 23                                                 | 1       | 1    | h    | Čas (HH) [Sloučeno]      | time.hp_timer_1_time (Hodina)   
+1259 | 0x04EB     | Blok 3 (0x08)  | Časovač 1 ZAP - minuta (T05)| 0 .. 59                                                 | 1       | 1    | min  | Čas (MM) [Sloučeno]      | time.hp_timer_1_time (Minuta)   
 1257 | 0x04E9     | Blok 3 (0x08)  | Povolení časovače 2 VYP(T03)| 0 = Vypnuto, 1 = Zapnuto                                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_timer_2_off_enable   
-1258 | 0x04EA     | Blok 3 (0x08)  | Časovač 2 VYP - hodina (T04)| 0 .. 23                                                 | 1       | 1    | h    | Číselník / Čas (HH)      | number.hp_timer_2_off_hour     
-1260 | 0x04EC     | Blok 3 (0x08)  | Časovač 2 VYP - minuta (T06)| 0 .. 59                                                 | 1       | 1    | min  | Číselník / Čas (MM)      | number.hp_timer_2_off_minute   
+1258 | 0x04EA     | Blok 3 (0x08)  | Časovač 2 VYP - hodina (T04)| 0 .. 23                                                 | 1       | 1    | h    | Čas (HH) [Sloučeno]      | time.hp_timer_2_time (Hodina)   
+1260 | 0x04EC     | Blok 3 (0x08)  | Časovač 2 VYP - minuta (T06)| 0 .. 59                                                 | 1       | 1    | min  | Čas (MM) [Sloučeno]      | time.hp_timer_2_time (Minuta)   
 1167 | 0x048F     | Blok 2 (0x04)  | Režim běhu čerpadla (P01)   | 0 = Běžný, 1 = Speciální, 2 = Interval                  | 1       | 1    | -    | Rozbalovací seznam       | select.hp_pump_running_mode    
 1168 | 0x0490     | Blok 2 (0x04)  | Interval běhu čerpadla (P02)| 0 .. 120                                                | 1       | 1    | min  | Číselník / Posuvník      | number.hp_pump_running_interval
 1169 | 0x0491     | Blok 2 (0x04)  | Doba chodu čerpadla (P03)   | 0 .. 30                                                 | 1       | 1    | min  | Číselník / Posuvník      | number.hp_pump_running_duration

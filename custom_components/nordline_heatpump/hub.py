@@ -75,6 +75,7 @@ class NordlineHeatPumpHub:
         self.lcd_emulator_enabled = False
         self.last_lcd_reply_time = time.time()  # Start with 10s grace period
         self.pending_event_flag = 0x8000  # Queue Flag 128 on startup
+        self.pending_flags_queue: list[int] = []
 
         # Diagnostic: EEPROM daily write endurance counter
         self.daily_write_count = 0
@@ -399,7 +400,11 @@ class NordlineHeatPumpHub:
         elif prev_flag != 0:
             _LOGGER.info("Single block settings synchronization acknowledged (Flag %d).", prev_flag)
 
-        self.pending_event_flag = 0
+        if self.pending_flags_queue:
+            self.pending_event_flag = self.pending_flags_queue.pop(0)
+            _LOGGER.info("Advancing to next queued sync flag: %d", self.pending_event_flag)
+        else:
+            self.pending_event_flag = 0
 
         # Send FC 16 Echo
         echo = bytearray([0x01, 0x10, 0x0B, 0xC3, 0x00, 0x01])
@@ -476,21 +481,27 @@ class NordlineHeatPumpHub:
             "Writing Register %d (%s) -> Raw: %d (Friendly: %s). Daily write count: %d.",
             reg, meta["name"], raw_val, value, self.daily_write_count
         )
-        self._notify_callbacks()
 
         # Update in-memory 180-byte block and queue synchronization flag
+        flag = 0
         if 1001 <= reg <= 1090:
             offset = (reg - 1001) * 2
             struct.pack_into(">H", self.config_block1, offset, raw_val)
-            self.pending_event_flag = 0x0002
+            flag = 0x0002
         elif 1091 <= reg <= 1180:
             offset = (reg - 1091) * 2
             struct.pack_into(">H", self.config_block2, offset, raw_val)
-            self.pending_event_flag = 0x0004
+            flag = 0x0004
         elif 1181 <= reg <= 1270:
             offset = (reg - 1181) * 2
             struct.pack_into(">H", self.config_block3, offset, raw_val)
-            self.pending_event_flag = 0x0008
+            flag = 0x0008
+
+        if flag != 0:
+            if self.pending_event_flag == 0:
+                self.pending_event_flag = flag
+            elif self.pending_event_flag != flag and flag not in self.pending_flags_queue:
+                self.pending_flags_queue.append(flag)
 
         # Update local states
         self.config_raw[reg] = raw_val
@@ -499,3 +510,91 @@ class NordlineHeatPumpHub:
 
         self._notify_callbacks()
         return True
+
+    def write_time_parameter(self, reg_hour: int, reg_minute: int, hour: int, minute: int) -> bool:
+        """Update a pair of configuration registers representing a time setting (hour and minute)."""
+        if not self.config_initialized:
+            _LOGGER.warning(
+                "Cannot write time setting (Reg %d, %d): Configuration not yet initialized (Flag 128 pending).",
+                reg_hour, reg_minute
+            )
+            return False
+
+        # --- EEPROM DAILY WRITE TRACKER ---
+        today = date.today().isoformat()
+        if self.daily_write_date != today:
+            self.daily_write_date = today
+            self.daily_write_count = 0
+
+        self.daily_write_count += 1
+        _LOGGER.info(
+            "Writing Time Setting -> Reg %d (Hour): %d, Reg %d (Min): %d. Daily write count: %d.",
+            reg_hour, hour, reg_minute, minute, self.daily_write_count
+        )
+
+        flags_to_queue: list[int] = []
+
+        # Update Hour register
+        if 1001 <= reg_hour <= 1090:
+            offset = (reg_hour - 1001) * 2
+            struct.pack_into(">H", self.config_block1, offset, hour)
+            if 0x0002 not in flags_to_queue:
+                flags_to_queue.append(0x0002)
+        elif 1091 <= reg_hour <= 1180:
+            offset = (reg_hour - 1091) * 2
+            struct.pack_into(">H", self.config_block2, offset, hour)
+            if 0x0004 not in flags_to_queue:
+                flags_to_queue.append(0x0004)
+        elif 1181 <= reg_hour <= 1270:
+            offset = (reg_hour - 1181) * 2
+            struct.pack_into(">H", self.config_block3, offset, hour)
+            if 0x0008 not in flags_to_queue:
+                flags_to_queue.append(0x0008)
+
+        # Update Minute register
+        if 1001 <= reg_minute <= 1090:
+            offset = (reg_minute - 1001) * 2
+            struct.pack_into(">H", self.config_block1, offset, minute)
+            if 0x0002 not in flags_to_queue:
+                flags_to_queue.append(0x0002)
+        elif 1091 <= reg_minute <= 1180:
+            offset = (reg_minute - 1091) * 2
+            struct.pack_into(">H", self.config_block2, offset, minute)
+            if 0x0004 not in flags_to_queue:
+                flags_to_queue.append(0x0004)
+        elif 1181 <= reg_minute <= 1270:
+            offset = (reg_minute - 1181) * 2
+            struct.pack_into(">H", self.config_block3, offset, minute)
+            if 0x0008 not in flags_to_queue:
+                flags_to_queue.append(0x0008)
+
+        # Update local states
+        self.config_raw[reg_hour] = hour
+        self.config_raw[reg_minute] = minute
+
+        meta_hour = CONFIG_REGISTERS_BY_REG.get(reg_hour)
+        if meta_hour:
+            self.config_data[meta_hour["key"]] = hour
+            self.config_data[str(reg_hour)] = hour
+
+        meta_min = CONFIG_REGISTERS_BY_REG.get(reg_minute)
+        if meta_min:
+            self.config_data[meta_min["key"]] = minute
+            self.config_data[str(reg_minute)] = minute
+
+        # Queue synchronization flags
+        if flags_to_queue:
+            first_flag = flags_to_queue[0]
+            if self.pending_event_flag == 0:
+                self.pending_event_flag = first_flag
+                remaining = flags_to_queue[1:]
+            else:
+                remaining = flags_to_queue
+
+            for f in remaining:
+                if f not in self.pending_flags_queue and f != self.pending_event_flag:
+                    self.pending_flags_queue.append(f)
+
+        self._notify_callbacks()
+        return True
+

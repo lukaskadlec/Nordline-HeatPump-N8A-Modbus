@@ -2223,3 +2223,67 @@ CONFIG_REGISTERS_BY_REG: dict[int, dict[str, Any]] = {
 CONFIG_REGISTERS_BY_KEY: dict[str, dict[str, Any]] = {
     item["key"]: item for item in CONFIG_REGISTERS
 }
+
+# Registers that are individual hour/minute parts compacted into unified Time entities
+TIME_REGISTER_NUMBERS: set[int] = {
+    1069,  # Mute Timer Start Hour
+    1070,  # Mute Timer End Hour
+    1256,  # Timer 1 (ON) Hour
+    1258,  # Timer 2 (OFF) Hour
+    1259,  # Timer 1 (ON) Minute
+    1260,  # Timer 2 (OFF) Minute
+    1261,  # Mute Timer Start Min
+    1262,  # Mute Timer End Min
+}
+
+# Unified Time configuration settings (compacting separate hour & minute registers)
+TIME_SETTINGS: list[dict[str, Any]] = [
+    {
+        "key": "timer_1_time",
+        "name": "Timer 1 (ON) Time",
+        "icon": "mdi:clock-outline",
+        "reg_hour": 1256,
+        "reg_minute": 1259,
+        "hour_key": "timer_1_hour",
+        "minute_key": "timer_1_minute",
+        "block_hour": 3,
+        "block_minute": 3,
+    },
+    {
+        "key": "timer_2_time",
+        "name": "Timer 2 (OFF) Time",
+        "icon": "mdi:clock-outline",
+        "reg_hour": 1258,
+        "reg_minute": 1260,
+        "hour_key": "timer_2_hour",
+        "minute_key": "timer_2_minute",
+        "block_hour": 3,
+        "block_minute": 3,
+    },
+    {
+        "key": "mute_start_time",
+        "name": "Mute Timer Start Time",
+        "icon": "mdi:clock-start",
+        "reg_hour": 1069,
+        "reg_minute": 1261,
+        "hour_key": "mute_start_hour",
+        "minute_key": "mute_start_minute",
+        "block_hour": 1,
+        "block_minute": 3,
+    },
+    {
+        "key": "mute_end_time",
+        "name": "Mute Timer End Time",
+        "icon": "mdi:clock-end",
+        "reg_hour": 1070,
+        "reg_minute": 1262,
+        "hour_key": "mute_end_hour",
+        "minute_key": "mute_end_minute",
+        "block_hour": 1,
+        "block_minute": 3,
+    },
+]
+
+TIME_SETTINGS_BY_KEY: dict[str, dict[str, Any]] = {
+    item["key"]: item for item in TIME_SETTINGS
+}
