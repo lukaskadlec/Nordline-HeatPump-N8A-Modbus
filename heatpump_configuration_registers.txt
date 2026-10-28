@@ -80,7 +80,7 @@ taxonomy:
    - Cooling Setpoint (number.hp_cooling_setpoint)
    - Timer 1 (ON) Enable / Time (switch.hp_timer_1_on_enable, time.hp_timer_1_time [Reg 1256 + 1259])
    - Timer 2 (OFF) Enable / Time (switch.hp_timer_2_off_enable, time.hp_timer_2_time [Reg 1258 + 1260])
-   - Fast Mute (switch.hp_fast_mute)
+   - Fast Mute (8h) (switch.hp_fast_mute)
    - Mute Timer Enable / Start / End (switch.hp_mute_timer_enable, time.hp_mute_start_time [Reg 1069 + 1261], time.hp_mute_end_time [Reg 1070 + 1262])
    - Electric Heater (switch.hp_electric_heater)
    - Pump Running Mode / Interval / Duration (select.hp_pump_running_mode, etc.)
@@ -105,7 +105,7 @@ taxonomy:
    - [Fan]        : Motor (Speed, Speed Set)
    - [EEV]        : Valve (Steps)
    - [System]     : Status (Freq Set, Freq Actual, Power ON/OFF, Status)
-   - [Output]     : Digital Relays O01 .. O13
+   - [Output]     : Digital Relays (1) .. (13)
    - [Alarm]      : Diagnostic & Safety S01 .. S07, Detail (Code)
 
 
@@ -173,7 +173,7 @@ Reg        | ID  | Parameter Name                   | Raw Val | Dec/Hex | Scale 
 1071       | F13 | Mute Mode Fan Speed              | 450     | 0x01C2  | 1     | 450 rpm        | 300 .. 1300 rpm (Default: 600)      | uint16 (rpm)                                                 
 1072       | F14 | DC/EC Fan Rated Speed            | 600     | 0x0258  | 1     | 600 rpm        | 0 .. 1300 rpm (Default: 600)        | uint16 (rpm)                                                 
 1073       | F15 | Fan Motor Type                   | 1       | 0x0001  | 1     | 1              | 0 .. 2 (Default: 1 / DC)            | enum: 0=AC, 1=DC, 2=2xDC                                     
-1074       | -   | Fast Mute                        | 0       | 0x0000  | 1     | Off            | 0 .. 1 (Active: 8 hrs)              | enum: 0=Off, 1=On (Instant Mute)                             
+1074       | -   | Fast Mute (8h)                   | 0       | 0x0000  | 1     | Off            | 0 .. 1 (Active: 8 hrs)              | enum: 0=Off, 1=On (Instant Mute)                             
 1075..1090 | -   | Reserved                         | 0       | 0x0000  | 1     | 0              | -                                   | uint16 (Reg 1075 to 1090)                                    
 
 
@@ -222,7 +222,7 @@ Reg        | ID  | Parameter Name               | Raw Val | Dec/Hex | Scale | Di
 1162       | G03 | Start Time                   | 1       | 0x0001  | 1     | 1 h           | 0 .. 23 h (Default: 0)        | uint16 (Hour 0-23)                       
 1163       | G04 | Work Cycle                   | 30      | 0x001E  | 1     | 30 Days       | 1 .. 30 Days (Default: 7)     | uint16 (Days)                            
 1164..1166 | -   | Reserved                     | 0       | 0x0000  | 1     | 0             | -                             | uint16 (Reg 1164 to 1166)                
-1167       | P01 | Pump Running Mode            | 1       | 0x0001  | 1     | Special       | 0 .. 2 (Default: 1 / Special) | enum: 0=Ordinary, 1=Special, 2=Interval  
+1167       | P01 | Pump Running Mode            | 1       | 0x0001  | 1     | With Compressor | 0 .. 2 (Default: 1 / With Comp) | enum: 0=Always On, 1=With Compressor, 2=Interval
 1168       | P02 | Pump Interval Time           | 30      | 0x001E  | 1     | 30 min        | 0 .. 120 min (Default: 30)    | uint16 (Minutes)                         
 1169       | P03 | Pump Running Duration        | 3       | 0x0003  | 1     | 3 min         | 0 .. 30 min (Default: 3)      | uint16 (Minutes)                         
 1170       | P04 | Pump Advanced Start Time     | 3       | 0x0003  | 1     | 3 min         | 0 .. 30 min (Default: 1)      | uint16 (Minutes lead time)               
@@ -337,7 +337,7 @@ Reg  | Modbus Hex | Block (Flag)   | UI Parameter Name           | Allowed Value
 1011 | 0x03EB     | Block 1 (0x02) | State (Power ON/OFF)        | 0 = Off, 1 = On                                         | 1     | 1    | -    | Toggle Switch            | switch.hp_power_state          
 1012 | 0x03EC     | Block 1 (0x02) | Mode (Operating Mode)       | 0=Hot Water, 1=Heating, 2=Cooling, 3=HW+Heat, 4=HW+Cool | 1     | 1    | -    | Dropdown / Select        | select.hp_operating_mode       
 1031 | 0x03FF     | Block 1 (0x02) | Electric Heater (H14)       | 0 = Off, 1 = On                                         | 1     | 1    | -    | Toggle Switch            | switch.hp_electric_heater      
-1074 | 0x0432     | Block 1 (0x02) | Fast Mute (Quiet Mode)      | 0 = Off, 1 = On (Active 8h)                             | 1     | 1    | -    | Toggle Switch            | switch.hp_fast_mute            
+1074 | 0x0432     | Block 1 (0x02) | Fast Mute (8h)              | 0 = Off, 1 = On (Active 8h)                             | 1     | 1    | -    | Toggle Switch            | switch.hp_fast_mute            
 1068 | 0x042C     | Block 1 (0x02) | Mute Timer (F10)            | 0 = Off (No), 1 = On (Yes)                              | 1     | 1    | -    | Toggle Switch            | switch.hp_mute_timer_enable    
 1069 | 0x042D     | Block 1 (0x02) | Mute Timer Start Hour (F11) | 0 .. 23                                                 | 1     | 1    | h    | Time (HH) [Compacted]    | time.hp_mute_start_time (Hour) 
 1261 | 0x04ED     | Block 3 (0x08) | Mute Timer Start Min        | 0 .. 59                                                 | 1     | 1    | min  | Time (MM) [Compacted]    | time.hp_mute_start_time (Min)  
@@ -352,7 +352,7 @@ Reg  | Modbus Hex | Block (Flag)   | UI Parameter Name           | Allowed Value
 1257 | 0x04E9     | Block 3 (0x08) | Timer 2 (OFF) Enable (T03)  | 0 = Disabled, 1 = Enabled                               | 1     | 1    | -    | Toggle Switch            | switch.hp_timer_2_off_enable   
 1258 | 0x04EA     | Block 3 (0x08) | Timer 2 (OFF) Hour (T04)    | 0 .. 23                                                 | 1     | 1    | h    | Time (HH) [Compacted]    | time.hp_timer_2_time (Hour)    
 1260 | 0x04EC     | Block 3 (0x08) | Timer 2 (OFF) Minute (T06)  | 0 .. 59                                                 | 1     | 1    | min  | Time (MM) [Compacted]    | time.hp_timer_2_time (Minute)  
-1167 | 0x048F     | Block 2 (0x04) | Pump Running Mode (P01)     | 0 = Ordinary, 1 = Special, 2 = Interval                 | 1     | 1    | -    | Dropdown / Select        | select.hp_pump_running_mode    
+1167 | 0x048F     | Block 2 (0x04) | Pump Running Mode (P01)     | 0 = Always On, 1 = With Compressor, 2 = Interval         | 1     | 1    | -    | Dropdown / Select        | select.hp_pump_running_mode    
 1168 | 0x0490     | Block 2 (0x04) | Pump Running Interval (P02) | 0 .. 120                                                | 1     | 1    | min  | Number Box / Slider      | number.hp_pump_running_interval
 1169 | 0x0491     | Block 2 (0x04) | Pump Running Duration (P03) | 0 .. 30                                                 | 1     | 1    | min  | Number Box / Slider      | number.hp_pump_running_duration
 

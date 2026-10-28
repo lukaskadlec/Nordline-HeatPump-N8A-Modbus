@@ -423,7 +423,7 @@ a hlavní ovládací prvky UI:
 - Reg 1071: Otáčky ventilátoru v tichém režimu (F13: 450 ot./min)
 - Reg 1072: Jmenovité otáčky DC/EC ventilátoru (F14: 600 ot./min)
 - Reg 1073: Typ motoru ventilátoru (F15: 1)
-- Reg 1074: Rychlý tichý režim Fast Mute (0 = Vypnuto, 1 = Zapnuto na 8 hod) [Ovládání tichého režimu]
+- Reg 1074: Rychlý tichý režim Fast Mute (8h) (0 = Vypnuto, 1 = Zapnuto na 8 hod) [Ovládání tichého režimu]
 
 --------------------------------------------------------------------------------
 5.6 Blok 2 dat nastavení (Reg 1091..1180) - Vyvolán příznakem 0x0004
@@ -491,7 +491,7 @@ Modbus Reg | Hex Addr | Blok (Příznak) | Uživatelský název          | Povol
 1257       | 0x04E9   | Blok 3 (0x08)  | Povolení časovače 2 VYP(T03| 0 = Vypnuto, 1 = Zapnuto                                  | 1      | 1     | -    | Přepínač (Toggle Switch) | switch.hp_timer_2_enable
 1258       | 0x04EA   | Blok 3 (0x08)  | Časovač 2 VYP - hodina(T04)| 0 .. 23                                                  | 1      | 1     | h    | Čas (HH) [Sloučeno]      | time.hp_timer_2_time (Hodina)
 1260       | 0x04EC   | Blok 3 (0x08)  | Časovač 2 VYP - minuta(T06)| 0 .. 59                                                  | 1      | 1     | min  | Čas (MM) [Sloučeno]      | time.hp_timer_2_time (Minuta)
-1167       | 0x048F   | Blok 2 (0x04)  | Režim běhu čerpadla (P01)  | 0 = Běžný, 1 = Speciální, 2 = Interval                   | 1      | 1     | -    | Výběrové pole (Select)   | select.hp_pump_running_mode
+1167       | 0x048F   | Blok 2 (0x04)  | Režim běhu čerpadla (P01)  | 0 = Always On, 1 = With Compressor, 2 = Interval         | 1      | 1     | -    | Výběrové pole (Select)   | select.hp_pump_running_mode
 1168       | 0x0490   | Blok 2 (0x04)  | Interval běhu čerpadla(P02)| 0 .. 120                                                 | 1      | 1     | min  | Číselník / Posuvník      | number.hp_pump_running_interval
 1169       | 0x0491   | Blok 2 (0x04)  | Doba běhu čerpadla (P03)   | 0 .. 30                                                  | 1      | 1     | min  | Číselník / Posuvník      | number.hp_pump_running_duration
 
@@ -791,7 +791,7 @@ Pokud je vaším cílem monitorovat a grafovat provozní veličiny v Home Assist
      * Expanzní ventil: `[EEV] Valve - Steps`
      * Stav systému: `[System] Status - Freq Set`, `Freq Actual`, `Power ON/OFF`, `Status`
    - Binární senzory a relé:
-     * Relé: `[Output] O01 Compressor` .. `[Output] O13 3-way Valve`
+     * Relé: `[Output] (1) Compressor` .. `[Output] (13) 3-way Valve`
      * Alarmy: `[Alarm] S01 High Pressure` .. `[Alarm] S07 Heater Overload`, `[Alarm] Detail - Code`
    - Stavové téma MQTT: `nodered/heatpump/nodered_heatpump_001/state` (neperzistentní, perioda 10 s).
 
@@ -815,7 +815,7 @@ poskytuje Node-RED obousměrnou synchronizaci pomocí Home Assistant MQTT Discov
    Pro zajištění přehledného uspořádání a abecedního řazení na kartách Home Assistant:
    - Karta Ovládání (Controls - 21 hlavních ovládacích prvků):
      Čisté názvy bez závorek: `Power State`, `Operating Mode`, `Heating Setpoint`,
-     `Hot Water Setpoint`, `Cooling Setpoint`, `Timer 1 (ON) Enable`, `Fast Mute` atd.
+     `Hot Water Setpoint`, `Cooling Setpoint`, `Timer 1 (ON) Enable`, `Fast Mute (8h)` atd.
      Entity ID: `switch.hp_power_state`, `select.hp_operating_mode`, `number.hp_boiler_target_temp` atd.
    - Karta Konfigurace (Configuration - 88 pokročilých registrů s `entityCategory: "config"`):
      Standardizovaný formát: `"[Skupina] Podskupina - ID Název"`

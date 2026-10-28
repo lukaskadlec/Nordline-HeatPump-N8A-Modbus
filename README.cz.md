@@ -4,7 +4,7 @@
 
 # Tepelné čerpadlo vzduch-voda Nordline (N8A) – Integrace Modbus a Home Assistant
 
-Obousměrné monitorování, telemetrie a plné konfigurační řízení pro tepelné čerpadlo **Nordline N8A vzduch-voda** (vybavené řídicí deskou **PC8002 PCB** a nástěnnou LCD jednotkou **Slave 1**).
+Obousměrné monitorování, telemetrie a plné konfigurační řízení pro tepelné čerpadlo **Nordline N8A vzduch-voda** (OEM model **PHNIX Hero H8A**, vybavené řídicí deskou **PC8002 PCB** a nástěnnou LCD jednotkou **Slave 1**).
 
 Tento projekt nabízí dvě cesty nasazení:
 1. **Nativní integrace pro Home Assistant (HACS) [Doporučeno]**: Přímé připojení přes lokální sériový port USB (`/dev/ttyUSB*`), nulová závislost na Node-RED či MQTT brokeru, grafická konfigurace (UI Config Flow), 42 telemetrických senzorů, 21 primárních ovládacích prvků, 88 konfiguračních registrů, vestavěný 10sekundový watchdog ticha fyzického LCD.
@@ -27,13 +27,14 @@ Tento projekt nabízí dvě cesty nasazení:
 ## Obsah
 1. [Architektura systému](#architektura-systému)
 2. [Požadavky na hardware](#požadavky-na-hardware)
-3. [Zapojení a přídavný vypínač napájení](#zapojení-a-přídavný-vypínač-napájení)
-4. [Metoda A: Nativní HACS integrace (Doporučeno)](#metoda-a-nativní-hacs-integrace-doporučeno)
-5. [Metoda B: Alternativa přes Node-RED a MQTT](#metoda-b-alternativa-přes-node-red-a-mqtt)
-6. [Nastavení sériového portu](#nastavení-sériového-portu)
-7. [Integrace do Home Assistant a uživatelské rozhraní](#integrace-do-home-assistant-a-uživatelské-rozhraní)
-8. [Bezpečnostní a ochranné mechanismy](#bezpečnostní-a-ochranné-mechanismy)
-9. [Referenční dokumentace](#referenční-dokumentace)
+3. [Kompatibilita hardwaru a OEM rebrandy](#kompatibilita-hardwaru-a-oem-rebrandy)
+4. [Zapojení a přídavný vypínač napájení](#zapojení-a-přídavný-vypínač-napájení)
+5. [Metoda A: Nativní HACS integrace (Doporučeno)](#metoda-a-nativní-hacs-integrace-doporučeno)
+6. [Metoda B: Alternativa přes Node-RED a MQTT](#metoda-b-alternativa-přes-node-red-a-mqtt)
+7. [Nastavení sériového portu](#nastavení-sériového-portu)
+8. [Integrace do Home Assistant a uživatelské rozhraní](#integrace-do-home-assistant-a-uživatelské-rozhraní)
+9. [Bezpečnostní a ochranné mechanismy](#bezpečnostní-a-ochranné-mechanismy)
+10. [Referenční dokumentace](#referenční-dokumentace)
 
 ---
 
@@ -63,7 +64,7 @@ Tento projekt nabízí dvě cesty nasazení:
 ## Požadavky na hardware
 
 Pro zprovoznění tohoto řešení budete potřebovat:
-1. **Tepelné čerpadlo Nordline N8A** (nebo kompatibilní jednotku s řídicí deskou PC8002 PCB).
+1. **Tepelné čerpadlo Nordline N8A** (nebo kompatibilní jednotku s řídicí deskou PC8002 PCB – viz [OEM rebrandy](#kompatibilita-hardwaru-a-oem-rebrandy)).
 2. **USB-RS485 adaptér**:
    - Důrazně doporučujeme galvanicky oddělený USB-RS485 převodník na bázi FTDI, CH340 nebo CP2102, který ochrání váš hostitelský systém před zemními smyčkami a přepětím.
 3. **Stíněný kroucený kabel**:
@@ -73,6 +74,18 @@ Pro zprovoznění tohoto řešení budete potřebovat:
    - Umožňuje okamžité a bezpečné přepínání mezi fyzickým nástěnným panelem a emulací.
 5. **Domácí server pro Home Assistant**:
    - Raspberry Pi, Intel NUC, Home Assistant Yellow/Green nebo virtuální stroj s Home Assistant OS / Supervised.
+
+---
+
+## Kompatibilita hardwaru a OEM rebrandy
+
+Tepelné čerpadlo **NORDline N8A** vychází z řady **PHNIX Hero Series**, konkrétně z OEM modelového označení **H8A** (v některých katalozích uváděno zjednodušeně jako **H8**), vyráběného společností **Guangdong PHNIX Eco-Energy Solution Ltd.**
+
+### Další komerční rebrandy modelu H8A
+Protože společnost PHNIX působí globálně jako ODM/OEM dodavatel, identická platforma byla distribuována pod různými obchodními názvy:
+- **ECON / Clima Control** (jižní Evropa): Prodáváno přímo jako **ECON Hero H8A**.
+- **EvoHeat** (Austrálie / Oceánie): Prodáváno v rámci invertorové řady **Evo Flex**.
+- **Automatic Heating** (mezinárodní trh): Uváděno na trh pod řadou monoblokových invertorů **AHGR410AW**.
 
 ---
 
@@ -209,7 +222,7 @@ Entity jsou strukturovány tak, aby se na kartách zařízení Home Assistant p�
   - `Power State` (Vypínač: `switch.hp_power_state`)
   - `Operating Mode` (Provozní režim: `select.hp_operating_mode`)
   - `Heating Setpoint`, `Hot Water Setpoint`, `Cooling Setpoint` (Požadovaná teplota topení, TUV, chlazení)
-  - `Fast Mute`, `Mute Timer Enable / Start / End` (Rychlý tichý režim, plánovač tichého režimu)
+  - `Fast Mute (8h)`, `Mute Timer Enable / Start / End` (Rychlý tichý režim, plánovač tichého režimu)
   - `Electric Heater`, `Daily Timer 1 & 2 Schedules` (Záložní elektrokotel, denní časovače 1 a 2)
   - `Pump Running Mode / Interval / Duration` (Režim, interval a doba běhu čerpadla)
 - **Konfigurace (88 pokročilých servisních registrů)**: Seskupeno podle kategorií s jednotnou předponou:
@@ -221,7 +234,7 @@ Entity jsou strukturovány tak, aby se na kartách zařízení Home Assistant p�
   - `[Fan]`: Otáčky ventilátoru, Požadované otáčky
   - `[EEV]`: Kroky elektronického expanzního ventilu
   - `[System]`: Požadovaná frekvence, Aktuální frekvence, Stav napájení ON/OFF, Status
-  - `[Output]`: Výstupní relé O01 až O13
+  - `[Output]`: Výstupní relé (1) až (13)
   - `[Alarm]`: Bezpečnostní spínače S01 až S07 a aktivní číselný kód chyby
 
 ---
@@ -253,4 +266,4 @@ Entity jsou strukturovány tak, aby se na kartách zařízení Home Assistant p�
 
 - [`heatpump_configuration_registers.cz.txt`](heatpump_configuration_registers.cz.txt) / [Anglická verze (`heatpump_configuration_registers.txt`)](heatpump_configuration_registers.txt): Kompletní servisní mapa 270 registrů, rozsahy parametrů, přepočty a tovární kódy.
 - [`heatpump_rs485_protocol_spec.cz.txt`](heatpump_rs485_protocol_spec.cz.txt) / [Anglická verze (`heatpump_rs485_protocol_spec.txt`)](heatpump_rs485_protocol_spec.txt): Podrobná specifikace reverzního inženýrství protokolu Modbus, časování rámců a stavové automaty.
-- [`Nordline_N8A_Manual.pdf`](Nordline_N8A_Manual.pdf): Oficiální servisní manuál výrobce k desce PC8002 PCB a schémata elektrického zapojení.
+- [`Nordline_N8A_Manual.pdf`](doc/Nordline_N8A_Manual.pdf): Oficiální servisní manuál výrobce k desce PC8002 PCB a schémata elektrického zapojení.

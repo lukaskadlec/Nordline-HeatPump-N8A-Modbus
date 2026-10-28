@@ -81,7 +81,7 @@ stavu a telemetrie strukturovanou taxonomii:
    - Cooling Setpoint (number.hp_cooling_setpoint)
    - Časovač 1 ZAP - Povolení / Čas (switch.hp_timer_1_on_enable, time.hp_timer_1_time [Reg 1256 + 1259])
    - Časovač 2 VYP - Povolení / Čas (switch.hp_timer_2_off_enable, time.hp_timer_2_time [Reg 1258 + 1260])
-   - Fast Mute (switch.hp_fast_mute)
+   - Fast Mute (8h) (switch.hp_fast_mute)
    - Tichý časovač - Povolení / Začátek / Konec (switch.hp_mute_timer_enable, time.hp_mute_start_time [Reg 1069 + 1261], time.hp_mute_end_time [Reg 1070 + 1262])
    - Electric Heater (switch.hp_electric_heater)
    - Pump Running Mode / Interval / Duration (select.hp_pump_running_mode, atd.)
@@ -106,7 +106,7 @@ stavu a telemetrie strukturovanou taxonomii:
    - [Fan]        : Motor (Speed, Speed Set)
    - [EEV]        : Valve (Steps)
    - [System]     : Status (Freq Set, Freq Actual, Power ON/OFF, Status)
-   - [Output]     : Digitální relé O01 .. O13
+   - [Output]     : Digitální relé (1) až (13)
    - [Alarm]      : Diagnostické a bezpečnostní spínače S01 .. S07, Detail (Kód)
 
 
@@ -174,7 +174,7 @@ Reg        | ID  | Název parametru                  | Surová | Dec/Hex | Měř
 1071       | F13 | Otáčky ventilátoru v tichém rež. | 450    | 0x01C2  | 1       | 450 rpm           | 300 .. 1300 rpm (Výchozí: 600)       | uint16 (ot./min)                                             
 1072       | F14 | Jmenovité otáčky DC/EC ventilát. | 600    | 0x0258  | 1       | 600 rpm           | 0 .. 1300 rpm (Výchozí: 600)         | uint16 (ot./min)                                             
 1073       | F15 | Typ motoru ventilátoru           | 1      | 0x0001  | 1       | 1                 | 0 .. 2 (Výchozí: 1 / DC)             | enum: 0=AC, 1=DC, 2=2xDC                                     
-1074       | -   | Rychlý tichý režim (Fast Mute)   | 0      | 0x0000  | 1       | Vypnuto           | 0 .. 1 (Aktivní 8 hodin)             | enum: 0=Vypnuto, 1=Zapnuto                                   
+1074       | -   | Rychlý tichý režim (Fast Mute 8h)| 0      | 0x0000  | 1       | Vypnuto           | 0 .. 1 (Aktivní 8 hodin)             | enum: 0=Vypnuto, 1=Zapnuto                                   
 1075..1090 | -   | Rezervováno                      | 0      | 0x0000  | 1       | 0                 | -                                    | uint16 (Reg 1075 až 1090)                                    
 
 
@@ -223,7 +223,7 @@ Reg        | ID  | Název parametru              | Surová | Dec/Hex | Měřítk
 1162       | G03 | Čas spuštění dezinfekce      | 1      | 0x0001  | 1       | 1 h               | 0 .. 23 h (Výchozí: 0)        | uint16 (Hodina 0-23)                     
 1163       | G04 | Pracovní cyklus (Perioda)    | 30     | 0x001E  | 1       | 30 dní            | 1 .. 30 dní (Výchozí: 7)      | uint16 (Dny)                             
 1164..1166 | -   | Rezervováno                  | 0      | 0x0000  | 1       | 0                 | -                             | uint16 (Reg 1164 až 1166)                
-1167       | P01 | Režim běhu čerpadla          | 1      | 0x0001  | 1       | Special           | 0 .. 2 (Výchozí: 1 / Special) | enum: 0=Běžný, 1=Speciální, 2=Interval   
+1167       | P01 | Režim běhu čerpadla          | 1      | 0x0001  | 1       | With Compressor   | 0 .. 2 (Výchozí: 1 / With Comp) | enum: 0=Always On, 1=With Compressor, 2=Interval
 1168       | P02 | Interval běhu čerpadla       | 30     | 0x001E  | 1       | 30 min            | 0 .. 120 min (Výchozí: 30)    | uint16 (Minuty)                          
 1169       | P03 | Doba chodu čerpadla v interv.| 3      | 0x0003  | 1       | 3 min             | 0 .. 30 min (Výchozí: 3)      | uint16 (Minuty)                          
 1170       | P04 | Předstih spuštění čerpadla   | 3      | 0x0003  | 1       | 3 min             | 0 .. 30 min (Výchozí: 1)      | uint16 (Minuty před kompresorem)         
@@ -338,7 +338,7 @@ Reg  | Modbus Hex | Blok (Příznak) | Uživatelský název           | Povolen�
 1011 | 0x03EB     | Blok 1 (0x02)  | Stav napájení (ON/OFF)      | 0 = Vypnuto, 1 = Zapnuto                                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_power_state          
 1012 | 0x03EC     | Blok 1 (0x02)  | Provozní režim              | 0=TUV, 1=Topení, 2=Chlazení, 3=TUV+Top, 4=TUV+Chl       | 1       | 1    | -    | Rozbalovací seznam       | select.hp_operating_mode       
 1031 | 0x03FF     | Blok 1 (0x02)  | Elektrický dohřev (H14)     | 0 = Vypnuto, 1 = Zapnuto                                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_electric_heater      
-1074 | 0x0432     | Blok 1 (0x02)  | Rychlý tichý režim (Fast)   | 0 = Vypnuto, 1 = Zapnuto (Aktivní 8 hod)                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_fast_mute            
+1074 | 0x0432     | Blok 1 (0x02)  | Rychlý tichý režim (8h)     | 0 = Vypnuto, 1 = Zapnuto (Aktivní 8 hod)                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_fast_mute            
 1068 | 0x042C     | Blok 1 (0x02)  | Časovač tichého rež. (F10)  | 0 = Vypnuto (Ne), 1 = Zapnuto (Ano)                     | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_mute_timer_enable    
 1069 | 0x042D     | Blok 1 (0x02)  | Začátek tichého - hod (F11)| 0 .. 23                                                 | 1       | 1    | h    | Čas (HH) [Sloučeno]      | time.hp_mute_start_time (Hodina)
 1261 | 0x04ED     | Blok 3 (0x08)  | Začátek tichého - min      | 0 .. 59                                                 | 1       | 1    | min  | Čas (MM) [Sloučeno]      | time.hp_mute_start_time (Minuta)
@@ -353,7 +353,7 @@ Reg  | Modbus Hex | Blok (Příznak) | Uživatelský název           | Povolen�
 1257 | 0x04E9     | Blok 3 (0x08)  | Povolení časovače 2 VYP(T03)| 0 = Vypnuto, 1 = Zapnuto                                | 1       | 1    | -    | Přepínač (Toggle)        | switch.hp_timer_2_off_enable   
 1258 | 0x04EA     | Blok 3 (0x08)  | Časovač 2 VYP - hodina (T04)| 0 .. 23                                                 | 1       | 1    | h    | Čas (HH) [Sloučeno]      | time.hp_timer_2_time (Hodina)   
 1260 | 0x04EC     | Blok 3 (0x08)  | Časovač 2 VYP - minuta (T06)| 0 .. 59                                                 | 1       | 1    | min  | Čas (MM) [Sloučeno]      | time.hp_timer_2_time (Minuta)   
-1167 | 0x048F     | Blok 2 (0x04)  | Režim běhu čerpadla (P01)   | 0 = Běžný, 1 = Speciální, 2 = Interval                  | 1       | 1    | -    | Rozbalovací seznam       | select.hp_pump_running_mode    
+1167 | 0x048F     | Blok 2 (0x04)  | Režim běhu čerpadla (P01)   | 0 = Always On, 1 = With Compressor, 2 = Interval         | 1       | 1    | -    | Rozbalovací seznam       | select.hp_pump_running_mode    
 1168 | 0x0490     | Blok 2 (0x04)  | Interval běhu čerpadla (P02)| 0 .. 120                                                | 1       | 1    | min  | Číselník / Posuvník      | number.hp_pump_running_interval
 1169 | 0x0491     | Blok 2 (0x04)  | Doba chodu čerpadla (P03)   | 0 .. 30                                                 | 1       | 1    | min  | Číselník / Posuvník      | number.hp_pump_running_duration
 

@@ -123,60 +123,60 @@
     "name": "[Electrical] °Comp - °Compressor °Current",
     "icon": "mdi:current-ac"
   },
-  "°Compressor (O01)": {
+  "Compressor (O01)": {
     "component": "binary_sensor",
-    "name": "[Output] O01 °Compressor",
+    "name": "[Output] (1) Compressor",
     "icon": "mdi:air-conditioner"
   },
   "Water Pump (O02)": {
     "component": "binary_sensor",
-    "name": "[Output] O02 Water Pump",
+    "name": "[Output] (2) Water Pump",
     "icon": "mdi:water-pump"
   },
   "4-way Valve (O03)": {
     "component": "binary_sensor",
-    "name": "[Output] O03 4-way Valve",
+    "name": "[Output] (3) 4-way Valve",
     "icon": "mdi:valve"
   },
   "Fan Motor (O04)": {
     "component": "binary_sensor",
-    "name": "[Output] O04 Fan Motor",
+    "name": "[Output] (4) Fan Motor",
     "icon": "mdi:fan"
   },
   "Antifreeze Heating Strip (O06)": {
     "component": "binary_sensor",
-    "name": "[Output] O06 Antifreeze Heat Strip",
+    "name": "[Output] (6) Antifreeze Heat Strip",
     "icon": "mdi:heating-coil"
   },
-  "°Crank Antifreeze Heating Strip (O07)": {
+  "Crank Antifreeze Heating Strip (O07)": {
     "component": "binary_sensor",
-    "name": "[Output] O07 °Crankcase Heat Strip",
+    "name": "[Output] (7) Crankcase Heat Strip",
     "icon": "mdi:heating-coil"
   },
   "Spray Valve (O08)": {
     "component": "binary_sensor",
-    "name": "[Output] O08 Spray Valve",
+    "name": "[Output] (8) Spray Valve",
     "icon": "mdi:spray"
   },
   "Auxiliary Electric Heater (O09)": {
     "component": "binary_sensor",
-    "name": "[Output] O09 Aux Electric Heater",
+    "name": "[Output] (9) Aux Electric Heater",
     "icon": "mdi:patio-heater"
   },
   "Alarm (O11)": {
     "component": "binary_sensor",
     "devClass": "problem",
-    "name": "[Output] O11 Alarm Output",
+    "name": "[Output] (11) Alarm Output",
     "icon": "mdi:alert-circle"
   },
   "Hot Water Pump (O12)": {
     "component": "binary_sensor",
-    "name": "[Output] O12 Hot Water Pump",
+    "name": "[Output] (12) Hot Water Pump",
     "icon": "mdi:water-pump"
   },
   "3-way Valve (O13)": {
     "component": "binary_sensor",
-    "name": "[Output] O13 3-way Valve",
+    "name": "[Output] (13) 3-way Valve",
     "icon": "mdi:valve"
   },
   "EVV": {

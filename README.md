@@ -4,7 +4,7 @@
 
 # Nordline Air-to-Water Heat Pump (N8A) - Modbus & Home Assistant Integration
 
-Bidirectional monitoring, telemetry, and full configuration control integration for the **Nordline N8A Air-to-Water Heat Pump** (equipped with the **PC8002 PCB Controller** and **Slave 1 LCD Wall Unit**).
+Bidirectional monitoring, telemetry, and full configuration control integration for the **Nordline N8A Air-to-Water Heat Pump** (OEM model **PHNIX Hero H8A**, equipped with the **PC8002 PCB Controller** and **Slave 1 LCD Wall Unit**).
 
 This project offers two implementation paths:
 1. **Native Home Assistant Custom Integration (HACS) [Recommended]**: Direct local serial port connection (`/dev/ttyUSB*`), zero Node-RED or MQTT dependencies, UI Config Flow, 42 telemetry sensors, 21 primary controls, 88 configuration registers, built-in 10-second silence watchdog.
@@ -27,13 +27,14 @@ This project offers two implementation paths:
 ## Table of Contents
 1. [System Architecture](#system-architecture)
 2. [Hardware Requirements](#hardware-requirements)
-3. [Wiring & Custom Power Switch](#wiring--custom-power-switch)
-4. [Method A: Native HACS Integration (Recommended)](#method-a-native-hacs-integration-recommended)
-5. [Method B: Node-RED & MQTT Alternative](#method-b-node-red--mqtt-alternative)
-6. [Serial Port Settings](#serial-port-settings)
-7. [Home Assistant Integration & UI](#home-assistant-integration--ui)
-8. [Safety & Fail-Safe Mechanisms](#safety--fail-safe-mechanisms)
-9. [Reference Documentation](#reference-documentation)
+3. [Hardware Compatibility & OEM Rebadges](#hardware-compatibility--oem-rebadges)
+4. [Wiring & Custom Power Switch](#wiring--custom-power-switch)
+5. [Method A: Native HACS Integration (Recommended)](#method-a-native-hacs-integration-recommended)
+6. [Method B: Node-RED & MQTT Alternative](#method-b-node-red--mqtt-alternative)
+7. [Serial Port Settings](#serial-port-settings)
+8. [Home Assistant Integration & UI](#home-assistant-integration--ui)
+9. [Safety & Fail-Safe Mechanisms](#safety--fail-safe-mechanisms)
+10. [Reference Documentation](#reference-documentation)
 
 ---
 
@@ -65,7 +66,7 @@ This project offers two implementation paths:
 ## Hardware Requirements
 
 To replicate this setup, you need:
-1. **Nordline N8A Heat Pump** (or compatible unit using PC8002 PCB controller).
+1. **Nordline N8A Heat Pump** (or compatible unit using PC8002 PCB controller — see [Hardware Compatibility & OEM Rebadges](#hardware-compatibility--oem-rebadges)).
 2. **USB-to-RS485 Adapter**:
    - An isolated FTDI, CH340, or CP2102-based USB-to-RS485 transceiver is recommended to protect your host from ground loops and electrical noise.
 3. **Shielded Twisted Pair Cable**:
@@ -75,6 +76,18 @@ To replicate this setup, you need:
    - Allows switching between the physical wall display and software emulation on demand.
 5. **Home Assistant Host**:
    - Home Assistant OS / Supervised on Raspberry Pi, Intel NUC, Home Assistant Yellow/Green, or Linux VM.
+
+---
+
+## Hardware Compatibility & OEM Rebadges
+
+The **NORDline N8A** is based on the **PHNIX Hero Series**, specifically the OEM model designation **H8A** (also listed in some catalogs simply as **H8**), manufactured by **Guangdong PHNIX Eco-Energy Solution Ltd.**
+
+### Other Commercial Rebadges of the H8A
+Because PHNIX acts as an ODM/OEM supplier globally, the identical platform was distributed under various brand names:
+- **ECON / Clima Control** (Southern Europe): Sold directly as the **ECON Hero H8A**.
+- **EvoHeat** (Australia/Oceania): Sold under the **Evo Flex** inverter series.
+- **Automatic Heating** (International): Marketed under the **AHGR410AW** monobloc inverter series.
 
 ---
 
@@ -212,7 +225,7 @@ Entities are structured so they sort logically on Home Assistant device cards:
   - `Power State` (`switch.hp_power_state`)
   - `Operating Mode` (`select.hp_operating_mode`)
   - `Heating Setpoint`, `Hot Water Setpoint`, `Cooling Setpoint`
-  - `Fast Mute`, `Mute Timer Enable / Start / End`
+  - `Fast Mute (8h)`, `Mute Timer Enable / Start / End`
   - `Electric Heater`, `Daily Timer 1 & 2 Schedules`
   - `Pump Running Mode / Interval / Duration`
 - **Configuration (88 Advanced Registers)**: Grouped with category prefixes:
@@ -224,7 +237,7 @@ Entities are structured so they sort logically on Home Assistant device cards:
   - `[Fan]`: Fan Speed, Fan Speed Set
   - `[EEV]`: Electronic Expansion Valve Steps
   - `[System]`: Freq Set, Freq Actual, Power ON/OFF, Status
-  - `[Output]`: Digital Relays O01 .. O13
+  - `[Output]`: Digital Relays (1) .. (13)
   - `[Alarm]`: S01 .. S07 Safety Switches & Active Numerical Alarm Code
 
 ---
@@ -256,4 +269,4 @@ Entities are structured so they sort logically on Home Assistant device cards:
 
 - [`heatpump_configuration_registers.txt`](heatpump_configuration_registers.txt) / [Česká verze (`heatpump_configuration_registers.cz.txt`)](heatpump_configuration_registers.cz.txt): Complete 270-register engineering map, parameter ranges, scalings, and manufacturer codes.
 - [`heatpump_rs485_protocol_spec.txt`](heatpump_rs485_protocol_spec.txt) / [Česká verze (`heatpump_rs485_protocol_spec.cz.txt`)](heatpump_rs485_protocol_spec.cz.txt): In-depth Modbus protocol reverse-engineering specification, frame timings, and state machines.
-- [`Nordline_N8A_Manual.pdf`](Nordline_N8A_Manual.pdf): Official manufacturer manual for PC8002 PCB controller and hardware wiring diagrams.
+- [`Nordline_N8A_Manual.pdf`](doc/Nordline_N8A_Manual.pdf): Official manufacturer manual for PC8002 PCB controller and hardware wiring diagrams.

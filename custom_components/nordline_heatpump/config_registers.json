@@ -138,7 +138,7 @@
   {
     "reg": 1074,
     "key": "fast_mute",
-    "name": "Fast Mute",
+    "name": "Fast Mute (8h)",
     "component": "switch",
     "icon": "mdi:volume-mute",
     "block": 1
@@ -217,8 +217,8 @@
     "name": "Pump Running Mode",
     "component": "select",
     "options": [
-      "Ordinary",
-      "Special",
+      "Always On",
+      "With Compressor",
       "Interval"
     ],
     "icon": "mdi:water-pump",
