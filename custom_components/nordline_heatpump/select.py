@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from homeassistant.components.select import SelectEntity
@@ -48,6 +49,9 @@ class NordlineHeatPumpSelect(NordlineHeatPumpEntity, SelectEntity):
         self._key = meta["key"]
         self._attr_options = meta.get("options", [])
 
+        self._pending_write: str | None = None
+        self._last_write_time: float = 0.0
+
         if meta.get("icon"):
             self._attr_icon = meta["icon"]
 
@@ -58,6 +62,17 @@ class NordlineHeatPumpSelect(NordlineHeatPumpEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         """Return the currently selected option."""
+        # Prevent incoming broadcast frames / master updates from overwriting a pending user selection
+        # for 5 seconds to give the PC8002 master time to poll and accept it.
+        if self._pending_write is not None:
+            if time.time() - self._last_write_time < 5.0:
+                return self._pending_write
+            self._pending_write = None
+
+        hub_pending = self._hub.get_pending_write(self._reg)
+        if hub_pending is not None:
+            return str(hub_pending)
+
         val = self._hub.config_data.get(self._key)
         if val is None:
             return None
@@ -65,4 +80,7 @@ class NordlineHeatPumpSelect(NordlineHeatPumpEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
+        self._pending_write = option
+        self._last_write_time = time.time()
         self._hub.write_parameter(self._reg, option)
+        self.async_write_ha_state()

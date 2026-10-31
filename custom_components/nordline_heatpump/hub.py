@@ -81,6 +81,9 @@ class NordlineHeatPumpHub:
         self.daily_write_count = 0
         self.daily_write_date = date.today().isoformat()
 
+        # Pending writes protection: reg -> {"raw": raw_val, "val": value, "time": timestamp, "flag": flag}
+        self._pending_writes: dict[int, dict[str, Any]] = {}
+
         # Callbacks & async tasks
         self._callbacks: set[Callable[[], None]] = set()
         self._running = False
@@ -95,6 +98,20 @@ class NordlineHeatPumpHub:
     def is_connected(self) -> bool:
         """Return True if serial communication is active."""
         return self._running and self._writer is not None
+
+    def is_pending_write(self, reg: int, timeout: float = 5.0) -> bool:
+        """Check if a register has a pending write within the timeout window."""
+        item = self._pending_writes.get(reg)
+        if item and (time.time() - item["time"] < timeout):
+            return True
+        return False
+
+    def get_pending_write(self, reg: int, timeout: float = 5.0) -> Any | None:
+        """Return the friendly pending value if active, else None."""
+        item = self._pending_writes.get(reg)
+        if item and (time.time() - item["time"] < timeout):
+            return item.get("val")
+        return None
 
     def register_callback(self, callback: Callable[[], None]) -> Callable[[], None]:
         """Register a callback to be called when data updates."""
@@ -354,9 +371,29 @@ class NordlineHeatPumpHub:
         elif block_num == 3:
             self.config_block3[:] = data_bytes
 
-        # Unpack 90 registers
+        # Unpack 90 registers, guarding pending writes within the 5.0s lock window
+        now_ts = time.time()
         for i in range(90):
             reg = start_reg + i
+            pending = self._pending_writes.get(reg)
+
+            if pending is not None:
+                if now_ts - pending["time"] < 5.0:
+                    # Write lock active: preserve pending value against Master's stale block
+                    raw_val = pending["raw"]
+                    val = pending["val"]
+                    # Re-pack staged write into the block so subsequent Master FC 03 reads receive it
+                    target_block = self.config_block1 if block_num == 1 else (self.config_block2 if block_num == 2 else self.config_block3)
+                    struct.pack_into(">H", target_block, i * 2, raw_val)
+                    self.config_raw[reg] = raw_val
+                    if reg in CONFIG_REGISTERS_BY_REG:
+                        key = CONFIG_REGISTERS_BY_REG[reg]["key"]
+                        self.config_data[key] = val
+                        self.config_data[str(reg)] = val
+                    continue
+                else:
+                    self._pending_writes.pop(reg, None)
+
             raw_val = struct.unpack_from(">H", data_bytes, i * 2)[0]
             self.config_raw[reg] = raw_val
 
@@ -399,6 +436,10 @@ class NordlineHeatPumpHub:
             _LOGGER.info("Full Flag 128 initialization handshake complete! All 270 registers synchronized.")
         elif prev_flag != 0:
             _LOGGER.info("Single block settings synchronization acknowledged (Flag %d).", prev_flag)
+            # Clear pending writes associated with the acknowledged block flag
+            expired_regs = [r for r, p in self._pending_writes.items() if p.get("flag") == prev_flag]
+            for r in expired_regs:
+                self._pending_writes.pop(r, None)
 
         if self.pending_flags_queue:
             self.pending_event_flag = self.pending_flags_queue.pop(0)
@@ -503,6 +544,14 @@ class NordlineHeatPumpHub:
             elif self.pending_event_flag != flag and flag not in self.pending_flags_queue:
                 self.pending_flags_queue.append(flag)
 
+        # Record pending write with 5-second race-protection lock window
+        self._pending_writes[reg] = {
+            "raw": raw_val,
+            "val": value,
+            "time": time.time(),
+            "flag": flag,
+        }
+
         # Update local states
         self.config_raw[reg] = raw_val
         self.config_data[key] = value
@@ -567,6 +616,13 @@ class NordlineHeatPumpHub:
             struct.pack_into(">H", self.config_block3, offset, minute)
             if 0x0008 not in flags_to_queue:
                 flags_to_queue.append(0x0008)
+
+        # Record pending writes with 5-second race-protection lock window
+        now_ts = time.time()
+        flag_h = 0x0002 if 1001 <= reg_hour <= 1090 else (0x0004 if 1091 <= reg_hour <= 1180 else 0x0008)
+        flag_m = 0x0002 if 1001 <= reg_minute <= 1090 else (0x0004 if 1091 <= reg_minute <= 1180 else 0x0008)
+        self._pending_writes[reg_hour] = {"raw": hour, "val": hour, "time": now_ts, "flag": flag_h}
+        self._pending_writes[reg_minute] = {"raw": minute, "val": minute, "time": now_ts, "flag": flag_m}
 
         # Update local states
         self.config_raw[reg_hour] = hour

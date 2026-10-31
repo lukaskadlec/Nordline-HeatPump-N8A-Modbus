@@ -214,6 +214,12 @@ Průběh synchronizace jednoho bloku:
 5. LCD potvrdí zápis ozvěnou FC 16: [01, 16, 0B, C3, 00, 01, F3, D1].
 Handshake je dokončen; sběrnice se vrací do klidového dotazování 1 Hz.
 
+Ochrana mezipaměti před souběhem (Write-Cache Race Protection):
+Během asynchronního průběhu synchronizace jsou rozpracované registry v mezipaměti emulátoru
+chráněny 5,0sekundovým zámkem (dirty lock). Tím se zabrání tomu, aby neaktuální všesměrové rámce
+Masteru (00 16 07 ...) nebo předčasné zápisy bloků FC 16 přepsaly rozpracované uživatelské změny
+před dokončením kroku 4 (potvrzení vymazáním Registru 3011).
+
 --------------------------------------------------------------------------------
 4.5 Handshake úplné inicializace systému (Flag 128 / 0x8000 kompletní vyčtení)
 --------------------------------------------------------------------------------

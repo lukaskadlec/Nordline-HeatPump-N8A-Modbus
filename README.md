@@ -262,6 +262,11 @@ Entities are structured so they sort logically on Home Assistant device cards:
    > - **Lifespan Protection**: Restricting daily adjustments to approximately 10 writes per parameter ensures decades of reliable hardware service.
    > - **Automation Caution**: Do not bind heat pump setpoints directly to real-time spot electricity price feeds or aggressive PID controllers that push changes every few seconds or minutes.
    > - **Recommended Usage**: Utilize built-in schedules, apply temperature hysteresis, and group setting updates into daily mode transitions (e.g., night setback vs daytime comfort 2–4 times a day).
+5. **5-Second Pending Write Lock & Cache Protection Window**:
+   - Protects pending parameter writes against write-cache race conditions during asynchronous Modbus handshakes.
+   - When a user or HA automation changes a setting (e.g. Operating Mode, setpoint, or power state), a 5-second dirty lock window is established.
+   - Any stale incoming Master cyclic broadcast frames (`00 16 07 ...`) or Master FC 16 block writes that arrive before the Master completes processing the new Slave 1 response are prevented from overwriting the staged cache.
+   - The lock clears immediately upon receiving the Master's Register 3011 Clear ACK or safely expires after 5.0 seconds, preventing transient UI flip-back.
 
 ---
 

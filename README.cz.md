@@ -259,6 +259,11 @@ Entity jsou strukturovány tak, aby se na kartách zařízení Home Assistant p�
    > - **Ochrana životnosti hardware**: Omezení změn parametrů na **maximálně 10  zápisů denně na jedno místo** představuje bezpečný provozní limit, který zajistí bezproblémovou a mnohaletou životnost řídicí jednotky tepelného čerpadla.
    > - **Varování pro automatizace**: Nikdy nevytvářejte vysokofrekvenční automatizační smyčky v Home Assistant (např. automatické přenastavování požadované teploty každou minutu dle spotových cen elektřiny, drobných odchylek pokojového termostatu či kolísání venkovní teploty).
    > - **Doporučená praxe**: Využívejte hysterezi, změny parametrů sdružujte a teploty upravujte pouze při hlavních přechodech denního režimu (např. útlum a komfort 2–4× za den).
+5. **5sekundový ochranný zámek zápisu a ochrana mezipaměti**:
+   - Chrání rozpracované zápisy parametrů před souběhem (race condition) během asynchronního Modbus handshake.
+   - Při změně nastavení uživatelem či automatizací v Home Assistant (např. provozní režim, žádaná teplota, stav napájení) se aktivuje 5sekundové ochranné okno.
+   - Příchozí cyklické všesměrové rámce Masteru (`00 16 07 ...`) nebo zápisové bloky FC 16, které dorazí dříve, než Master stihne zpracovat novou odpověď Slave 1, nemohou přepsat staged mezipaměť starými hodnotami.
+   - Zámek se uvolní okamžitě po potvrzení Masterem (potvrzovací rámec vymazání registru 3011) nebo bezpečně vyprší po 5,0 sekundách, což eliminuje problikávání stavu v uživatelském rozhraní HA.
 
 ---
 

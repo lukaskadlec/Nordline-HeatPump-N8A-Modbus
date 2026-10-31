@@ -208,6 +208,12 @@ Single Block Handshake Flow:
 5. LCD confirms write with FC 16 Echo: [01, 16, 0B, C3, 00, 01, F3, D1].
 Handshake complete; system returns to 1 Hz idle polling.
 
+Write-Cache Race Protection Guard:
+During the asynchronous handshake window, staged registers in the emulator cache are
+protected by a 5.0-second dirty lock. This prevents stale Master broadcast frames
+(00 16 07 ...) or premature FC 16 block writes from overwriting in-flight user modifications
+before Step 4 (Master clearing Reg 3011).
+
 --------------------------------------------------------------------------------
 4.5 Full System Initialization Handshake (Flag 128 / 0x8000 Full Read-Out)
 --------------------------------------------------------------------------------

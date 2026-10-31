@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from homeassistant.components.number import (
@@ -69,6 +70,9 @@ class NordlineHeatPumpNumber(NordlineHeatPumpEntity, NumberEntity):
         else:
             self._attr_mode = NumberMode.AUTO
 
+        self._pending_write: float | None = None
+        self._last_write_time: float = 0.0
+
         if meta.get("icon"):
             self._attr_icon = meta["icon"]
 
@@ -79,6 +83,19 @@ class NordlineHeatPumpNumber(NordlineHeatPumpEntity, NumberEntity):
     @property
     def native_value(self) -> float | None:
         """Return the current numerical value."""
+        # Prevent incoming frames from overwriting pending user selection during 5s write lock
+        if self._pending_write is not None:
+            if time.time() - self._last_write_time < 5.0:
+                return self._pending_write
+            self._pending_write = None
+
+        hub_pending = self._hub.get_pending_write(self._reg)
+        if hub_pending is not None:
+            try:
+                return float(hub_pending)
+            except (ValueError, TypeError):
+                pass
+
         val = self._hub.config_data.get(self._key)
         if val is None:
             return None
@@ -89,4 +106,7 @@ class NordlineHeatPumpNumber(NordlineHeatPumpEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Write new parameter value to heat pump."""
+        self._pending_write = float(value)
+        self._last_write_time = time.time()
         self._hub.write_parameter(self._reg, value)
+        self.async_write_ha_state()

@@ -45,6 +45,9 @@ class NordlineHeatPumpTime(NordlineHeatPumpEntity, TimeEntity):
         self._hour_key = meta["hour_key"]
         self._minute_key = meta["minute_key"]
 
+        self._pending_write: time | None = None
+        self._last_write_time: float = 0.0
+
         if meta.get("icon"):
             self._attr_icon = meta["icon"]
 
@@ -54,6 +57,12 @@ class NordlineHeatPumpTime(NordlineHeatPumpEntity, TimeEntity):
     @property
     def native_value(self) -> time | None:
         """Return the current time value."""
+        import time as _sys_time
+        if self._pending_write is not None:
+            if _sys_time.time() - self._last_write_time < 5.0:
+                return self._pending_write
+            self._pending_write = None
+
         hour = self._hub.config_raw.get(self._reg_hour)
         if hour is None:
             hour = self._hub.config_data.get(self._hour_key)
@@ -76,9 +85,13 @@ class NordlineHeatPumpTime(NordlineHeatPumpEntity, TimeEntity):
 
     async def async_set_value(self, value: time) -> None:
         """Write new time value to heat pump."""
+        import time as _sys_time
+        self._pending_write = value
+        self._last_write_time = _sys_time.time()
         self._hub.write_time_parameter(
             self._reg_hour,
             self._reg_minute,
             value.hour,
             value.minute,
         )
+        self.async_write_ha_state()

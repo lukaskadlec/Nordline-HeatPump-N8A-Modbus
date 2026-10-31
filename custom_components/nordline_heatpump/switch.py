@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
@@ -47,6 +48,9 @@ class NordlineHeatPumpSwitch(NordlineHeatPumpEntity, SwitchEntity):
         self._reg = meta["reg"]
         self._key = meta["key"]
 
+        self._pending_write: bool | None = None
+        self._last_write_time: float = 0.0
+
         if meta.get("icon"):
             self._attr_icon = meta["icon"]
 
@@ -57,6 +61,16 @@ class NordlineHeatPumpSwitch(NordlineHeatPumpEntity, SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         """Return True if switch is ON."""
+        # Prevent incoming frames from overwriting pending user selection during 5s write lock
+        if self._pending_write is not None:
+            if time.time() - self._last_write_time < 5.0:
+                return self._pending_write
+            self._pending_write = None
+
+        hub_pending = self._hub.get_pending_write(self._reg)
+        if hub_pending is not None:
+            return bool(hub_pending)
+
         val = self._hub.config_data.get(self._key)
         if val is None:
             return None
@@ -64,8 +78,14 @@ class NordlineHeatPumpSwitch(NordlineHeatPumpEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch ON."""
+        self._pending_write = True
+        self._last_write_time = time.time()
         self._hub.write_parameter(self._reg, 1)
+        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch OFF."""
+        self._pending_write = False
+        self._last_write_time = time.time()
         self._hub.write_parameter(self._reg, 0)
+        self.async_write_ha_state()
