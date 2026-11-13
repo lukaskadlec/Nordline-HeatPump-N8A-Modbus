@@ -87,7 +87,7 @@ class NordlineHeatPumpTelemetrySensor(NordlineHeatPumpEntity, SensorEntity):
             unit = meta.get("unit")
             if unit:
                 self._attr_native_unit_of_measurement = unit
-                if unit == "rpm":
+                if unit in ("rpm", "steps") or meta.get("stateClass") == "measurement":
                     self._attr_state_class = SensorStateClass.MEASUREMENT
 
         if meta.get("icon"):

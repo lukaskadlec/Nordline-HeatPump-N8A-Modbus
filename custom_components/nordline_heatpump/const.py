@@ -580,6 +580,7 @@ TELEMETRY_SENSORS_META: dict[str, dict[str, Any]] = {
         "icon": "mdi:valve"
     },
     "EVV": {
+        "unit": "steps",
         "icon": "mdi:pipe-valve",
         "name": "[EEV] Valve - Steps"
     },
